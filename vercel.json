@@ -1,11 +1,1 @@
-{
-  "buildCommand": "npm run build",
-  "outputDirectory": "build",
-  "framework": "react",
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/index.js"
-    }
-  ]
-}
+{}
