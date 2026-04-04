@@ -1,10 +1,39 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const TrackOrder = () => {
+  const [trackingId, setTrackingId] = useState("");
+
+  const openTrackingSearch = () => {
+    if (!trackingId.trim()) {
+      alert("Please enter your tracking number or order ID.");
+      return;
+    }
+    const url = `https://www.google.com/search?q=${encodeURIComponent(`track package ${trackingId.trim()}`)}`;
+    window.open(url, '_blank');
+  };
   return (
     <div className="space-y-6 text-gray-700">
       <h2 className="text-2xl font-bold text-gray-900">Track Your Order</h2>
-      
+      <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+        <label htmlFor="tracking-id" className="block text-sm font-semibold text-gray-700 mb-2">
+          Enter your Order ID or Tracking Number
+        </label>
+        <div className="flex gap-3 flex-col sm:flex-row">
+          <input
+            id="tracking-id"
+            value={trackingId}
+            onChange={(e) => setTrackingId(e.target.value)}
+            placeholder="VK-123456789 or order id"
+            className="w-full rounded-2xl border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-teal-400 outline-none"
+          />
+          <button
+            onClick={openTrackingSearch}
+            className="rounded-2xl bg-gradient-to-r from-blue-700 to-teal-600 text-white px-5 py-3 font-semibold hover:shadow-lg transition"
+          >
+            Track Package
+          </button>
+        </div>
+      </div>
       <div>
         <h3 className="text-lg font-semibold text-gray-800 mb-2">How to Track Your Order</h3>
         <ol className="list-decimal pl-5 space-y-2">

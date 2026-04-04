@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ShoppingCart, User, Menu, X } from "lucide-react";
+import { ShoppingCart, User, Search, Menu, X } from "lucide-react";
 
 export default function Header({ currentPage, onPageChange, cartCount, user, onLogout }) {
   const isAdmin = user?.role === "admin";
@@ -43,8 +43,15 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
           </nav>
         </div>
 
-        {/* Right Side - Cart and Profile */}
+        {/* Right Side - Search, Cart and Profile */}
         <div className="flex items-center gap-2 md:gap-4">
+          <button
+            onClick={() => onPageChange("Search")}
+            className="hidden sm:flex items-center gap-2 bg-slate-700 px-3 md:px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-700 transition font-semibold"
+          >
+            <Search size={20} />
+            <span>Search</span>
+          </button>
           <button
             onClick={() => onPageChange("Cart")}
             className="flex items-center gap-2 bg-slate-700 px-3 md:px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-700 transition font-semibold"
@@ -103,8 +110,16 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
               >
                 {page}
               </button>
-            ))}
-            {!user && (
+            ))}            <button
+              onClick={() => {
+                onPageChange("Search");
+                setMobileMenuOpen(false);
+              }}
+              className="font-semibold text-sm transition px-4 py-3 text-left text-white hover:bg-slate-700 flex items-center gap-2"
+            >
+              <Search size={18} />
+              Search
+            </button>            {!user && (
               <button
                 onClick={() => {
                   onPageChange("Login");

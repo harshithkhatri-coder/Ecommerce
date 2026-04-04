@@ -1,4 +1,5 @@
 require("dotenv").config();
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
@@ -79,26 +80,44 @@ const orderSchema = new mongoose.Schema({
   total: { type: Number, required: true },
   address: { type: String },
   status: { type: String, default: "Pending" },
+  payment_method: { type: String, default: "Prepaid" },
+  tracking_location: { type: String, default: "" },
   estimated_delivery: { type: Date },
+  cancellation_reason: { type: String, default: "" },
+  cancelled_at: { type: Date, default: null },
   created_at: { type: Date, default: Date.now }
 });
 const Order = mongoose.model("Order", orderSchema);
 
-// Generate unique order ID
-async function generateOrderId() {
-  const prefix = "ORD-";
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  const orderId = `${prefix}${timestamp}-${random}`;
+// Notification Schema
+const notificationSchema = new mongoose.Schema({
+  type: { type: String, required: true }, // "order_placed", "order_cancelled", "order_updated"
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  order_id: { type: String },
+  user_id: { type: String },
+  user_name: { type: String },
+  is_read: { type: Boolean, default: false },
+  created_at: { type: Date, default: Date.now }
+});
+const Notification = mongoose.model("Notification", notificationSchema);
 
-  // Check if order_id already exists
-  const existing = await Order.findOne({ order_id: orderId });
-  if (existing) {
-    // Generate again if duplicate (very rare)
-    return generateOrderId();
+// Helper function to create notifications
+async function createNotification(type, title, message, orderId = null, userId = null, userName = null) {
+  try {
+    const notification = new Notification({
+      type,
+      title,
+      message,
+      order_id: orderId,
+      user_id: userId,
+      user_name: userName
+    });
+    await notification.save();
+    console.log(`📢 Notification created: ${type} - ${title}`);
+  } catch (err) {
+    console.error("Error creating notification:", err);
   }
-
-  return orderId;
 }
 
 // ===== Middleware =====
@@ -107,7 +126,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Serve static images from public folder
-app.use('/images', express.static('public/images'));
+app.use('/images', express.static(path.join(__dirname, 'public/images')));
 
 // ===== DATABASE SEEDING =====
 async function initializeDatabase() {
@@ -424,6 +443,8 @@ app.post("/api/orders", async (req, res) => {
       total,
       address: address || "",
       status: "Pending",
+      payment_method: "Prepaid",
+      tracking_location: "",
       estimated_delivery: estimatedDelivery
     });
 
@@ -441,6 +462,16 @@ app.post("/api/orders", async (req, res) => {
         estimatedDelivery,
       },
     });
+
+    // Create notification for admin
+    await createNotification(
+      "order_placed",
+      "New Order Received",
+      `Order ${orderId} placed by ${user.name} for ₹${total}`,
+      orderId,
+      userId,
+      user.name
+    );
   } catch (err) {
     console.error("Error placing order:", err);
     res.status(500).json({ success: false, message: "Failed to place order" });
@@ -461,6 +492,88 @@ app.get("/api/orders/:userId", async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to fetch orders" });
   }
 });
+
+// PUT to cancel an order
+const cancelOrderHandler = async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ success: false, message: "No token provided" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const { reason } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ success: false, message: "Cancellation reason is required" });
+    }
+
+    let order = null;
+    const orderId = req.params.orderId;
+
+    if (mongoose.Types.ObjectId.isValid(orderId)) {
+      order = await Order.findById(orderId);
+    }
+
+    if (!order) {
+      order = await Order.findOne({ order_id: orderId });
+    }
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // Check if the order belongs to the authenticated user
+    if (order.user_id !== user._id.toString()) {
+      return res.status(403).json({ success: false, message: "You can only cancel your own orders" });
+    }
+
+    if (order.status === "Delivered" || order.status === "Cancelled") {
+      return res.status(400).json({ success: false, message: "This order cannot be cancelled" });
+    }
+
+    order.status = "Cancelled";
+    order.cancellation_reason = reason.trim();
+    order.cancelled_at = new Date();
+    const updatedOrder = await order.save();
+
+    console.log("Order cancelled:", updatedOrder._id, "Status:", updatedOrder.status, "By user:", user._id);
+
+    res.json({
+      success: true,
+      message: "Order cancelled successfully",
+      data: toPlainObj(updatedOrder)
+    });
+
+    // Create notification for admin
+    await createNotification(
+      "order_cancelled",
+      "Order Cancelled",
+      `Order ${updatedOrder.order_id} cancelled by ${user.name}. Reason: ${reason.trim()}`,
+      updatedOrder.order_id,
+      user._id,
+      user.name
+    );
+  } catch (err) {
+    console.error("Error cancelling order:", err);
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(401).json({ success: false, message: "Invalid token" });
+    }
+    res.status(500).json({ success: false, message: "Failed to cancel order: " + err.message });
+  }
+};
+
+app.put("/api/orders/:orderId/cancel", cancelOrderHandler);
+app.put("/api/orders/cancel/:orderId", cancelOrderHandler);
+app.put("/api/order-cancel/:orderId", cancelOrderHandler);
 
 // ===== USER AUTHENTICATION ENDPOINTS =====
 
@@ -948,10 +1061,14 @@ app.get("/api/admin/orders/:id", async (req, res) => {
 
 // Update order status (Admin)
 app.put("/api/admin/orders/:id/status", async (req, res) => {
-  const { status } = req.body;
-
+  const { status, tracking_location } = req.body;
   const validStatuses = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
-  if (!validStatuses.includes(status)) {
+
+  if (!status && typeof tracking_location === "undefined") {
+    return res.status(400).json({ success: false, message: "Please provide a status or tracking location" });
+  }
+
+  if (status && !validStatuses.includes(status)) {
     return res.status(400).json({ success: false, message: "Invalid status" });
   }
 
@@ -961,18 +1078,32 @@ app.put("/api/admin/orders/:id/status", async (req, res) => {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    await Order.findByIdAndUpdate(req.params.id, {
-      status,
-      updated_at: new Date()
-    });
+    const updatePayload = { updated_at: new Date() };
+    if (status) updatePayload.status = status;
+    if (typeof tracking_location !== "undefined") updatePayload.tracking_location = tracking_location;
+
+    await Order.findByIdAndUpdate(req.params.id, updatePayload);
 
     const updatedOrder = await Order.findById(req.params.id);
 
     res.json({
       success: true,
-      message: "Order status updated successfully",
+      message: "Order updated successfully",
       data: toPlainObj(updatedOrder),
     });
+
+    // Create notification for status change
+    if (status && status !== order.status) {
+      const user = await User.findById(order.user_id);
+      await createNotification(
+        "order_updated",
+        "Order Status Updated",
+        `Order ${order.order_id} status changed from ${order.status} to ${status}`,
+        order.order_id,
+        order.user_id,
+        user ? user.name : "Customer"
+      );
+    }
   } catch (err) {
     console.error("Error updating order status:", err);
     res.status(500).json({ success: false, message: "Failed to update order status" });
@@ -1038,6 +1169,61 @@ app.get("/api/admin/stats", async (req, res) => {
 // ===== HEALTH CHECK =====
 app.get("/api/health", (req, res) => {
   res.json({ success: true, status: "ok", database: "MongoDB" });
+});
+
+// ===== NOTIFICATION ENDPOINTS =====
+
+// Get all notifications (Admin only)
+app.get("/api/admin/notifications", async (req, res) => {
+  try {
+    const notifications = await Notification.find().sort({ created_at: -1 });
+    res.json({
+      success: true,
+      data: notifications.map(toPlainObj),
+      count: notifications.length,
+    });
+  } catch (err) {
+    console.error("Error fetching notifications:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch notifications" });
+  }
+});
+
+// Mark notification as read (Admin only)
+app.put("/api/admin/notifications/:id/read", async (req, res) => {
+  try {
+    const notification = await Notification.findByIdAndUpdate(
+      req.params.id,
+      { is_read: true },
+      { new: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({ success: false, message: "Notification not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Notification marked as read",
+      data: toPlainObj(notification)
+    });
+  } catch (err) {
+    console.error("Error marking notification as read:", err);
+    res.status(500).json({ success: false, message: "Failed to mark notification as read" });
+  }
+});
+
+// Get unread notification count (Admin only)
+app.get("/api/admin/notifications/unread-count", async (req, res) => {
+  try {
+    const count = await Notification.countDocuments({ is_read: false });
+    res.json({
+      success: true,
+      count
+    });
+  } catch (err) {
+    console.error("Error fetching unread count:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch unread count" });
+  }
 });
 
 // ===== ERROR HANDLING =====

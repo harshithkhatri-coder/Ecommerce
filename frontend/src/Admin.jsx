@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import {
   Package, ShoppingCart, Users, DollarSign, Plus, Edit2, Trash2,
-  Eye, X, Home, BarChart3, TrendingUp, Lock, Mail, LogOut, Upload
+  Eye, X, Home, BarChart3, TrendingUp, Lock, Mail, LogOut, Upload,
+  Bell, CheckCircle
 } from "lucide-react";
 import API_BASE_URL from "./config";
 
@@ -12,11 +13,14 @@ export default function Admin({ onPageChange, onLogout }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [stats, setStats] = useState({});
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [trackingInputs, setTrackingInputs] = useState({});
 
   const [loginForm, setLoginForm] = useState({
     email: "",
@@ -105,12 +109,30 @@ export default function Admin({ onPageChange, onLogout }) {
         setProducts(productsData.data);
       }
 
-      const ordersRes = await fetch(`${API_BASE_URL}/orders`, {
+      const ordersRes = await fetch(`${API_BASE_URL}/admin/orders`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const ordersData = await ordersRes.json();
       if (ordersData.success) {
         setOrders(ordersData.data);
+      }
+
+      // Fetch notifications
+      const notificationsRes = await fetch(`${API_BASE_URL}/admin/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const notificationsData = await notificationsRes.json();
+      if (notificationsData.success) {
+        setNotifications(notificationsData.data);
+      }
+
+      // Fetch unread count
+      const unreadRes = await fetch(`${API_BASE_URL}/admin/notifications/unread-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const unreadData = await unreadRes.json();
+      if (unreadData.success) {
+        setUnreadCount(unreadData.count);
       }
 
       const totalRevenue = ordersData.data?.reduce((sum, order) => sum + (order.total || 0), 0) || 0;
@@ -161,6 +183,25 @@ export default function Admin({ onPageChange, onLogout }) {
     setIsAuthenticated(false);
     setAdminUser(null);
     if (onLogout) onLogout();
+  };
+
+  const markNotificationAsRead = async (notificationId) => {
+    const token = localStorage.getItem("adminToken");
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/notifications/${notificationId}/read`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        setNotifications(notifications.map(notif =>
+          notif.id === notificationId ? { ...notif, is_read: true } : notif
+        ));
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
   };
 
   const handleAddProduct = () => {
@@ -285,17 +326,20 @@ export default function Admin({ onPageChange, onLogout }) {
     }
   };
 
-  const handleUpdateOrderStatus = async (orderId, status) => {
+  const handleUpdateOrderStatus = async (orderId, status, trackingLocation = "") => {
     const token = localStorage.getItem("adminToken");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+      const body = { tracking_location: trackingLocation };
+      if (status) body.status = status;
+
+      const response = await fetch(`${API_BASE_URL}/admin/orders/${orderId}/status`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -315,7 +359,7 @@ export default function Admin({ onPageChange, onLogout }) {
     const token = localStorage.getItem("adminToken");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+      const response = await fetch(`${API_BASE_URL}/admin/orders/${orderId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -521,6 +565,18 @@ export default function Admin({ onPageChange, onLogout }) {
               <ShoppingCart className="inline mr-2" size={20} />
               Orders
             </button>
+            <button
+              onClick={() => setActiveTab("notifications")}
+              className={`px-6 py-4 font-semibold transition relative ${activeTab === "notifications" ? "border-b-2 border-teal-600 text-teal-600" : "text-gray-600 hover:text-gray-800"}`}
+            >
+              <Bell className="inline mr-2" size={20} />
+              Notifications
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -661,6 +717,7 @@ export default function Admin({ onPageChange, onLogout }) {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Items</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Total</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Location</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Date</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Actions</th>
                   </tr>
@@ -680,6 +737,9 @@ export default function Admin({ onPageChange, onLogout }) {
                           {order.status}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {order.tracking_location || "Not set"}
+                      </td>
                       <td className="px-6 py-4 text-gray-600 text-sm">
                         {order.created_at ? new Date(order.created_at).toLocaleDateString() : "-"}
                       </td>
@@ -691,17 +751,34 @@ export default function Admin({ onPageChange, onLogout }) {
                           >
                             <Eye size={18} />
                           </button>
-                          <select
-                            value={order.status}
-                            onChange={(e) => handleUpdateOrderStatus(order.id || order._id, e.target.value)}
-                            className="border rounded-lg px-2 py-1 text-sm"
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Processing">Processing</option>
-                            <option value="Shipped">Shipped</option>
-                            <option value="Delivered">Delivered</option>
-                            <option value="Cancelled">Cancelled</option>
-                          </select>
+                          <div className="flex flex-col gap-2">
+                            <select
+                              value={order.status}
+                              onChange={(e) => handleUpdateOrderStatus(order.id || order._id, e.target.value, trackingInputs[order.id || order._id] ?? order.tracking_location ?? "")}
+                              className="border rounded-lg px-2 py-1 text-sm"
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="Processing">Processing</option>
+                              <option value="Shipped">Shipped</option>
+                              <option value="Delivered">Delivered</option>
+                              <option value="Cancelled">Cancelled</option>
+                            </select>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={trackingInputs[order.id || order._id] ?? order.tracking_location ?? ""}
+                                onChange={(e) => setTrackingInputs(prev => ({ ...prev, [order.id || order._id]: e.target.value }))}
+                                placeholder="Tracking location"
+                                className="w-full border rounded-lg px-2 py-1 text-sm"
+                              />
+                              <button
+                                onClick={() => handleUpdateOrderStatus(order.id || order._id, order.status, trackingInputs[order.id || order._id] ?? order.tracking_location ?? "")}
+                                className="bg-teal-100 hover:bg-teal-200 text-teal-600 p-2 rounded-lg transition"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
                           <button
                             onClick={() => handleDeleteOrder(order.id || order._id)}
                             className="bg-red-100 hover:bg-red-200 text-red-600 p-2 rounded-lg transition"
@@ -883,6 +960,62 @@ export default function Admin({ onPageChange, onLogout }) {
         </div>
       )}
 
+      {/* Notifications Tab */}
+      {activeTab === "notifications" && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <Bell className="text-teal-600" size={28} />
+              Notifications
+            </h2>
+            <span className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-sm font-semibold">
+              {unreadCount} unread
+            </span>
+          </div>
+
+          {notifications.length === 0 ? (
+            <div className="text-center py-12">
+              <Bell className="mx-auto h-16 w-16 text-gray-300 mb-4" />
+              <p className="text-gray-500">No notifications yet</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id || notification._id}
+                  className={`border rounded-lg p-4 ${!notification.is_read ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="font-semibold text-gray-800">{notification.title}</h3>
+                        {!notification.is_read && (
+                          <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">New</span>
+                        )}
+                      </div>
+                      <p className="text-gray-600 mb-2">{notification.message}</p>
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <span>{notification.user_name && `Customer: ${notification.user_name}`}</span>
+                        <span>{new Date(notification.created_at).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    {!notification.is_read && (
+                      <button
+                        onClick={() => markNotificationAsRead(notification.id || notification._id)}
+                        className="ml-4 bg-teal-100 hover:bg-teal-200 text-teal-600 p-2 rounded-lg transition"
+                        title="Mark as read"
+                      >
+                        <CheckCircle size={18} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Order Detail Modal */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -907,6 +1040,13 @@ export default function Admin({ onPageChange, onLogout }) {
                   </span>
                 </div>
               </div>
+
+              {selectedOrder.cancellation_reason && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                  <p className="text-sm text-gray-600 font-semibold">Cancellation Reason</p>
+                  <p className="text-gray-800">{selectedOrder.cancellation_reason}</p>
+                </div>
+              )}
 
               <div>
                 <p className="text-sm text-gray-600">Customer</p>

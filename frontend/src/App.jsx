@@ -9,6 +9,7 @@ import Login from "./Login";
 import Profile from "./Profile";
 import Admin from "./Admin";
 import Footer from "./Footer";
+import SearchPage from "./SearchPage";
 import './App.css';
 
 export default function App() {
@@ -116,7 +117,10 @@ export default function App() {
         return <Login onPageChange={handlePageChange} />;
       case "Profile":
         return <Profile onPageChange={handlePageChange} />;
+      case "Search":
+        return <SearchPage searchQuery="" onPageChange={handlePageChange} onAddToCart={addToCart} />;
       case "Admin":
+
         // Check if user is admin (check both state and localStorage for admin role)
         const localStorageUser = localStorage.getItem("user");
         const localStorageAdminUser = localStorage.getItem("adminUser");

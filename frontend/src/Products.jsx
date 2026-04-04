@@ -2,10 +2,13 @@ import React, { useState, useEffect } from "react";
 import { productsData } from "./productsData";
 import { Heart } from "lucide-react";
 import API_BASE_URL from "./config";
+import { resolveImageUrl } from "./imageHelpers";
 
 export default function Products({ onAddToCart, onPageChange }) {
   const [displayed, setDisplayed] = useState(12);
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOption, setSortOption] = useState("featured");
   const [products, setProducts] = useState(productsData); // Load static data immediately
   const [wishlist, setWishlist] = useState([]);
   const loading = false; // Static data loads instantly, no loading state needed
@@ -93,11 +96,35 @@ export default function Products({ onAddToCart, onPageChange }) {
     ? products
     : products.filter(p => (p.category || "").toLowerCase().trim() === selectedCategory.toLowerCase().trim());
 
+  const searchedProducts = searchQuery.trim() === ""
+    ? filteredProducts
+    : filteredProducts.filter((p) => {
+        const lower = searchQuery.toLowerCase().trim();
+        return (p.name || "").toLowerCase().includes(lower)
+          || (p.description || "").toLowerCase().includes(lower)
+          || (p.category || "").toLowerCase().includes(lower);
+      });
+
+  const sortedProducts = [...searchedProducts].sort((a, b) => {
+    switch (sortOption) {
+      case "priceLowHigh":
+        return (a.price || 0) - (b.price || 0);
+      case "priceHighLow":
+        return (b.price || 0) - (a.price || 0);
+      case "nameAZ":
+        return (a.name || "").localeCompare(b.name || "");
+      case "nameZA":
+        return (b.name || "").localeCompare(a.name || "");
+      default:
+        return 0;
+    }
+  });
+
   // Dynamically generate categories from products
   const uniqueCategories = ["All", ...new Set(products.map(p => p.category).filter(Boolean))];
 
-  const visibleProducts = filteredProducts.slice(0, displayed);
-  const hasMore = displayed < filteredProducts.length;
+  const visibleProducts = sortedProducts.slice(0, displayed);
+  const hasMore = displayed < sortedProducts.length;
 
   const loadMore = () => {
     setDisplayed((prev) => Math.min(prev + 4, filteredProducts.length));
@@ -109,7 +136,7 @@ export default function Products({ onAddToCart, onPageChange }) {
   };
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-slate-50 via-blue-50 to-teal-50">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-blue-50 to-teal-50">
       {/* Page Header */}
       <div className="bg-gradient-to-r from-blue-700 via-teal-600 to-teal-500 text-white py-12 px-4 shadow-lg">
         <div className="max-w-7xl mx-auto text-center">
@@ -120,6 +147,39 @@ export default function Products({ onAddToCart, onPageChange }) {
 
       {/* Category Filter */}
       <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-4 mb-6">
+          <div className="w-full lg:w-1/2">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setDisplayed(12);
+              }}
+              placeholder="Search products by name, category, or description"
+              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-800 focus:ring-2 focus:ring-teal-400"
+            />
+          </div>
+          <div className="w-full lg:w-1/2 flex items-center justify-end gap-3">
+            <label htmlFor="sort" className="sr-only">Sort products</label>
+            <select
+              id="sort"
+              value={sortOption}
+              onChange={(e) => {
+                setSortOption(e.target.value);
+                setDisplayed(12);
+              }}
+              className="w-full lg:w-72 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800"
+            >
+              <option value="featured">Featured</option>
+              <option value="priceLowHigh">Price: Low to High</option>
+              <option value="priceHighLow">Price: High to Low</option>
+              <option value="nameAZ">Name: A–Z</option>
+              <option value="nameZA">Name: Z–A</option>
+            </select>
+          </div>
+        </div>
+
         <div className="flex flex-wrap justify-center gap-4">
           {uniqueCategories.map((category) => (
             <button
@@ -156,12 +216,12 @@ export default function Products({ onAddToCart, onPageChange }) {
                 >
                   <div
                     onClick={() => onPageChange("ProductDetails", product._id || product.id)}
-                    className="relative overflow-hidden rounded-xl mb-4 cursor-pointer h-56"
+                    className="relative overflow-hidden rounded-xl mb-4 cursor-pointer h-72 sm:h-80"
                   >
                     <img
-                      src={product.image_url || product.image}
+                      src={resolveImageUrl(product.image_url || product.image || product.images?.[0])}
                       alt={product.name}
-                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
+                      className="w-full h-full object-contain bg-slate-100 hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold">
                       {product.category}

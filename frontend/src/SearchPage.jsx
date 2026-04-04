@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Search as SearchIcon, ArrowLeft, X } from "lucide-react";
 import { productsData } from "./productsData";
+import { resolveImageUrl } from "./imageHelpers";
 
 export default function Search({ searchQuery, onPageChange, onAddToCart }) {
   const [query, setQuery] = useState(searchQuery || "");
@@ -108,7 +109,7 @@ export default function Search({ searchQuery, onPageChange, onAddToCart }) {
                     className="relative overflow-hidden rounded-xl mb-4 cursor-pointer"
                   >
                     <img
-                      src={product.image}
+                      src={resolveImageUrl(product.image || product.image_url)}
                       alt={product.name}
                       className="w-full h-48 object-cover hover:scale-110 transition"
                     />

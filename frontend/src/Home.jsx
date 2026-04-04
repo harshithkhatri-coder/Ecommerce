@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Carousel from "./Carousel";
 import API_BASE_URL from "./config";
+import { resolveImageUrl } from "./imageHelpers";
 
 // Sample products to show when API is unavailable
 const SAMPLE_PRODUCTS = [
@@ -82,7 +83,7 @@ export default function Home({ cart, onAddToCart, onPageChange }) {
               >
                 <div className="relative h-64">
                   <img
-                    src={product.image_url || product.image}
+                    src={resolveImageUrl(product.image_url || product.image)}
                     alt={product.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft, Plus, Minus, ShoppingCart, CreditCard, Heart } from "lucide-react";
 import API_BASE_URL from "./config";
 import { productsData } from "./productsData";
+import { resolveImageUrl } from "./imageHelpers";
 
 export default function ProductDetails({ productId, onPageChange, onAddToCart }) {
   const [product, setProduct] = useState(null);
@@ -104,6 +105,8 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
   }
 
   const sizes = ["7", "8", "9", "10", "11", "12"];
+  const reviewCount = reviews.length;
+  const averageRating = reviewCount > 0 ? Math.round(reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviewCount) : 0;
   // const totalPrice = product.price * quantity;
   const MAX_ITEMS = 5;
 
@@ -238,7 +241,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
           <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 flex items-center justify-center min-h-64 md:min-h-96">
             <div className="relative w-full h-full flex items-center justify-center">
               <img
-                src={product.image_url || product.image}
+                src={resolveImageUrl(product.image_url || product.image)}
                 alt={product.name}
                 onError={(e) => {
                   if (product.image && e.currentTarget.src !== product.image) {
@@ -272,12 +275,16 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
             <div className="flex items-center gap-2 mb-4">
               <div className="flex gap-1">
                 {[...Array(5)].map((_, i) => (
-                  <span key={i} className="text-yellow-400 text-xl">
+                  <span key={i} className={`text-xl ${i < averageRating ? 'text-yellow-400' : 'text-gray-300'}`}>
                     ★
                   </span>
                 ))}
               </div>
-              <span className="text-gray-600">(248 reviews)</span>
+              <span className="text-gray-600">
+                {reviewCount > 0
+                  ? `(${reviewCount} customer review${reviewCount !== 1 ? 's' : ''})`
+                  : 'No reviews yet'}
+              </span>
             </div>
 
             {/* Price */}
@@ -402,7 +409,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
                       {review.images.map((img, imgIndex) => (
                         <img
                           key={imgIndex}
-                          src={img}
+                          src={resolveImageUrl(img)}
                           alt={`Review attachment ${imgIndex + 1}`}
                           className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
                         />

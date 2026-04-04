@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Trash2, ShoppingCart, ArrowLeft, Plus, Minus } from "lucide-react";
 import API_BASE_URL from "./config";
+import { resolveImageUrl } from "./imageHelpers";
 
 export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, user }) {
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -144,7 +145,7 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                   <div key={index} className="border-b last:border-b-0 p-4 md:p-6 hover:bg-gray-50 transition">
                     <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
                       <img
-                        src={item.image_url || item.image}
+                        src={resolveImageUrl(item.image_url || item.image)}
                         alt={item.name}
                         className="w-full sm:w-24 h-32 sm:h-24 object-cover rounded-lg"
                       />
@@ -212,6 +213,10 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                       ₹{total + Math.round(total * 0.18)}
                     </span>
                   </div>
+                </div>
+
+                <div className="mb-6 rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-700">
+                  Payment method: <strong>Prepaid only</strong>. Cash on delivery is not available.
                 </div>
 
                 {/* Saved Delivery Address */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { User, Mail, Phone, MapPin, Edit2, Save, X, Heart, ShoppingBag, LogOut } from "lucide-react";
+import { User, Mail, Phone, MapPin, Edit2, Save, X, Heart, ShoppingBag, LogOut, AlertCircle } from "lucide-react";
 import API_BASE_URL from "./config";
+import { resolveImageUrl } from "./imageHelpers";
 
 export default function Profile({ onPageChange }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -11,6 +12,10 @@ export default function Profile({ onPageChange }) {
   const [wishlist, setWishlist] = useState([]);
   const [wishlistLoading, setWishlistLoading] = useState(true);
   const [showWishlist, setShowWishlist] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [selectedOrderToCancel, setSelectedOrderToCancel] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [canceling, setCanceling] = useState(false);
   const [profileData, setProfileData] = useState({
     name: "",
     email: "",
@@ -119,6 +124,130 @@ export default function Profile({ onPageChange }) {
       }
     } catch (err) {
       console.error("Error removing from wishlist:", err);
+    }
+  };
+
+  const getTrackingReference = (order) => {
+    return order.tracking_number || order.order_id || "";
+  };
+
+  const openTrackingLink = (order) => {
+    const reference = getTrackingReference(order);
+    if (!reference) {
+      alert("No tracking reference available for this order.");
+      return;
+    }
+
+    const trackingUrl = `https://www.google.com/search?q=${encodeURIComponent(
+      `track package ${reference}`
+    )}`;
+    window.open(trackingUrl, "_blank");
+  };
+
+  const handleCancelClick = (order) => {
+    if (order.status === "Delivered" || order.status === "Cancelled") {
+      alert("This order cannot be cancelled.");
+      return;
+    }
+    setSelectedOrderToCancel(order);
+    setCancelReason("");
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelReason.trim()) {
+      alert("Please provide a reason for cancellation.");
+      return;
+    }
+
+    const user = JSON.parse(localStorage.getItem("user"));
+    const token = localStorage.getItem("token");
+
+    setCanceling(true);
+    try {
+      const orderId = selectedOrderToCancel.id || selectedOrderToCancel._id || selectedOrderToCancel.order_id || selectedOrderToCancel.orderId;
+      if (!orderId) {
+        alert("Order ID is missing. Cannot cancel this order.");
+        setCanceling(false);
+        return;
+      }
+
+      const encodedOrderId = encodeURIComponent(orderId);
+      const urls = [
+        `${API_BASE_URL}/orders/${encodedOrderId}/cancel`,
+        `${API_BASE_URL}/orders/cancel/${encodedOrderId}`,
+        `${API_BASE_URL}/order-cancel/${encodedOrderId}`,
+      ];
+
+      let response = null;
+      let data = null;
+      let triedUrl = null;
+
+      for (const nextUrl of urls) {
+        triedUrl = nextUrl;
+        console.log("Trying cancel URL:", nextUrl);
+        response = await fetch(nextUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ reason: cancelReason }),
+        });
+
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+          data = { success: false, message: `Unexpected response: ${text}` };
+        }
+
+        console.log("Cancel response:", response.status, data, "from", nextUrl);
+
+        if (response.ok) {
+          break;
+        }
+
+        if (response.status !== 404) {
+          break;
+        }
+      }
+
+      if (!response) {
+        alert("No response from cancel service.");
+        return;
+      }
+
+      if (!response.ok) {
+        alert(`Cancel failed (${response.status}) on ${triedUrl}: ${data.message || "Unknown error"}`);
+        return;
+      }
+
+      if (!response.ok) {
+        alert(`Cancel failed (${response.status}): ${data.message || "Unknown error"}`);
+        return;
+      }
+
+      if (data.success) {
+        setOrders(
+          orders.map((order) =>
+            (order.id || order._id || order.order_id || order.orderId) === orderId
+              ? { ...order, status: "Cancelled", cancellation_reason: cancelReason }
+              : order
+          )
+        );
+        setShowCancelModal(false);
+        setCancelReason("");
+        alert("Order cancelled successfully!");
+      } else {
+        alert(data.message || "Failed to cancel order");
+      }
+    } catch (err) {
+      console.error("Error cancelling order:", err);
+      alert("Error cancelling order: " + (err.message || "Unknown error"));
+    } finally {
+      setCanceling(false);
     }
   };
 
@@ -330,9 +459,9 @@ export default function Profile({ onPageChange }) {
                       {wishlist.map((product) => (
                         <div key={product._id} className="border-2 border-gray-200 rounded-lg p-4 hover:border-teal-300 transition">
                           <div className="flex gap-4">
-                            {product.image_url && (
+                            {(product.image_url || product.image) && (
                               <img
-                                src={product.image_url}
+                                src={resolveImageUrl(product.image_url || product.image)}
                                 alt={product.name}
                                 className="w-24 h-24 object-cover rounded-lg"
                               />
@@ -533,7 +662,7 @@ export default function Profile({ onPageChange }) {
                           <div key={idx} className="flex items-center gap-4">
                             {item.image_url && (
                               <img
-                                src={item.image_url}
+                                src={resolveImageUrl(item.image_url || item.image)}
                                 alt={item.name}
                                 className="w-16 h-16 object-cover rounded-lg"
                               />
@@ -546,9 +675,35 @@ export default function Profile({ onPageChange }) {
                           </div>
                         ))}
                       </div>
-                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+                      <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
                         <p className="text-sm text-gray-500">{order.items.length} item(s)</p>
                         <p className="text-xl font-bold text-gray-800">Total: ₹{order.total}</p>
+                      </div>
+                      {order.payment_method && (
+                        <p className="mt-2 text-sm text-gray-600">Payment method: {order.payment_method}</p>
+                      )}
+                      {order.tracking_location && (
+                        <p className="mt-2 text-sm text-gray-600">Last known location: {order.tracking_location}</p>
+                      )}
+                      {order.cancellation_reason && (
+                        <p className="mt-2 text-sm text-red-600">Cancellation reason: {order.cancellation_reason}</p>
+                      )}
+                      <div className="mt-4 flex flex-wrap gap-3 items-center">
+                        <button
+                          onClick={() => openTrackingLink(order)}
+                          className="px-4 py-2 bg-gradient-to-r from-blue-600 to-teal-500 text-white rounded-lg hover:shadow-lg transition"
+                        >
+                          Track Package
+                        </button>
+                        {order.status !== "Delivered" && order.status !== "Cancelled" && (
+                          <button
+                            onClick={() => handleCancelClick(order)}
+                            className="px-4 py-2 bg-gradient-to-r from-red-600 to-orange-500 text-white rounded-lg hover:shadow-lg transition"
+                          >
+                            Cancel Order
+                          </button>
+                        )}
+                        <p className="text-sm text-gray-500">Reference: {getTrackingReference(order)}</p>
                       </div>
                     </div>
                   ))}
@@ -617,6 +772,42 @@ export default function Profile({ onPageChange }) {
             </div>
           </div>
         </div>
+
+        {/* Cancel Order Modal */}
+        {showCancelModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full mx-4">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertCircle className="text-red-600" size={24} />
+                <h3 className="text-2xl font-bold text-gray-800">Cancel Order</h3>
+              </div>
+              <p className="text-gray-600 mb-4">Order: {selectedOrderToCancel?.order_id}</p>
+              <p className="text-sm text-gray-500 mb-4">Please provide a reason for cancellation:</p>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g., Found a better price, Change of mind, etc."
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-red-500 mb-4 resize-none"
+                rows="4"
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className="flex-1 border-2 border-gray-300 text-gray-700 py-2 rounded-lg font-bold hover:bg-gray-50 transition"
+                >
+                  Keep Order
+                </button>
+                <button
+                  onClick={handleConfirmCancel}
+                  disabled={canceling}
+                  className="flex-1 bg-gradient-to-r from-red-600 to-orange-500 text-white py-2 rounded-lg font-bold hover:shadow-lg transition disabled:opacity-50"
+                >
+                  {canceling ? "Cancelling..." : "Yes, Cancel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
