@@ -44,7 +44,7 @@ export default function App() {
   // Check if user is admin (derived from user state)
   const isAdmin = user?.role === "admin";
 
-  const addToCart = (product) => {
+  const addToCart = (product, options = {}) => {
     // Calculate current total items in cart
     const currentTotalItems = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
     const MAX_ITEMS = 5;
@@ -55,33 +55,34 @@ export default function App() {
       return;
     }
 
-    setCart((prevCart) => {
-      // Check if product already exists in cart
-      const existingIndex = prevCart.findIndex(
-        (item) => (item._id || item.id) === (product._id || product.id)
-      );
-      
-      if (existingIndex >= 0) {
-        // Product exists, increment quantity (but don't exceed limit)
-        const newCart = [...prevCart];
-        const currentQty = newCart[existingIndex].quantity || 1;
-        
-        // Check if we can add more of this item
-        if (currentTotalItems + 1 > MAX_ITEMS) {
-          alert(`You can only add up to ${MAX_ITEMS} items total. You've reached the limit.`);
-          return prevCart;
-        }
-        
-        newCart[existingIndex] = {
-          ...newCart[existingIndex],
-          quantity: currentQty + 1
-        };
-        return newCart;
+    // Check if product already exists in cart
+    const existingIndex = cart.findIndex(
+      (item) => (item._id || item.id) === (product._id || product.id)
+    );
+
+    let updatedCart = [...cart];
+    if (existingIndex >= 0) {
+      const currentQty = updatedCart[existingIndex].quantity || 1;
+
+      // Check if we can add more of this item
+      if (currentTotalItems + 1 > MAX_ITEMS) {
+        alert(`You can only add up to ${MAX_ITEMS} items total. You've reached the limit.`);
+        return;
       }
-      
+
+      updatedCart[existingIndex] = {
+        ...updatedCart[existingIndex],
+        quantity: currentQty + 1
+      };
+    } else {
       // Product doesn't exist, add with quantity 1
-      return [...prevCart, { ...product, quantity: 1 }];
-    });
+      updatedCart = [...cart, { ...product, quantity: 1 }];
+    }
+
+    setCart(updatedCart);
+    if (!options.silent) {
+      alert("Product added to cart");
+    }
   };
 
   const handlePageChange = (page, productId = null) => {

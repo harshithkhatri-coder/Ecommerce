@@ -10,10 +10,13 @@ const mongoose = require("mongoose");
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "velux_kicks_secret_key_2024";
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/ecommerce";
+const MONGO_URI =
+  process.env.MONGO_URI ||
+  "mongodb+srv://gowdarakshith4663_db_user:gowdaatlas@velux.ofigioe.mongodb.net/ecommerce?retryWrites=true&w=majority";
 
 // ===== MONGODB CONNECTION =====
-console.log("MongoDB URI:", MONGO_URI);
+const safeMongoUri = MONGO_URI.replace(/:([^:@]+)@/, ":****@");
+console.log("MongoDB URI:", safeMongoUri);
 mongoose.connect(MONGO_URI)
   .then(async () => {
     console.log("✅ Connected to MongoDB");
@@ -220,6 +223,19 @@ function toPlainObj(doc) {
   delete obj._id;
   delete obj.__v;
   return obj;
+}
+
+async function generateOrderId() {
+  // Keep order IDs readable while still preventing collisions.
+  for (let i = 0; i < 5; i++) {
+    const candidate = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.random()
+      .toString(36)
+      .slice(2, 6)
+      .toUpperCase()}`;
+    const exists = await Order.exists({ order_id: candidate });
+    if (!exists) return candidate;
+  }
+  return `ORD-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
 // ===== PRODUCT ENDPOINTS =====

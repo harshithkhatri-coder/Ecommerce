@@ -121,7 +121,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
     }
 
     for (let i = 0; i < quantity; i++) {
-      onAddToCart(product);
+      onAddToCart(product, { silent: true });
     }
     alert(`Added ${quantity} item(s) to cart!`);
   };
@@ -136,7 +136,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
     }
 
     for (let i = 0; i < quantity; i++) {
-      onAddToCart(product);
+      onAddToCart(product, { silent: true });
     }
     onPageChange("Cart");
   };
