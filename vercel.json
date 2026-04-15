@@ -1,1 +1,1 @@
-{"framework": "react", "rootDirectory": "frontend", "buildCommand": "npm install && npm run build", "outputDirectory": "build"}
+{"framework": "react", "buildCommand": "npm install && npm run build", "outputDirectory": "build"}
