@@ -6,15 +6,44 @@ import {
 } from "lucide-react";
 import API_BASE_URL from "./config";
 
+const DEFAULT_CAROUSEL_IMAGES = [
+  { id: 1, url: "/images/SHOE1.jpg", title: "BRANDED SHOES" },
+  { id: 2, url: "/images/WhatsApp Image 2026-01-13 at 7.57.38 PM.jpeg", title: "Premium Collection" },
+  { id: 3, url: "/images/WhatsApp Image 2026-01-13 at 7.57.39 PM (1).jpeg", title: "New Arrivals" },
+  { id: 4, url: "/images/WhatsApp Image 2026-01-13 at 7.57.39 PM.jpeg", title: "Premium Sneakers" },
+  { id: 5, url: "/images/WhatsApp Image 2026-01-13 at 7.57.40 PM.jpeg", title: "Latest Trends" }
+];
+
+function loadCarouselImages() {
+  try {
+    const saved = localStorage.getItem("carouselImages");
+    if (!saved) return DEFAULT_CAROUSEL_IMAGES;
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_CAROUSEL_IMAGES;
+
+    return parsed.map((item, index) => ({
+      id: item?.id || index + 1,
+      title: item?.title || `Slide ${index + 1}`,
+      url: item?.url || ""
+    }));
+  } catch (error) {
+    return DEFAULT_CAROUSEL_IMAGES;
+  }
+}
+
 export default function Admin({ onPageChange, onLogout }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminUser, setAdminUser] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({});
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [carouselItems, setCarouselItems] = useState(loadCarouselImages());
+  const [editingCarousel, setEditingCarousel] = useState(false);
+  const [carouselForm, setCarouselForm] = useState([]);
 
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -39,6 +68,55 @@ export default function Admin({ onPageChange, onLogout }) {
   });
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+
+  const openCarouselEditor = () => {
+    setCarouselForm(loadCarouselImages());
+    setEditingCarousel(true);
+  };
+
+  const handleCarouselFieldChange = (index, field, value) => {
+    const next = [...carouselForm];
+    if (!next[index]) next[index] = { id: index + 1, url: "", title: "" };
+    next[index][field] = value;
+    setCarouselForm(next);
+  };
+
+  const handleCarouselImageFileChange = (index, file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      handleCarouselFieldChange(index, "url", reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveCarouselChanges = () => {
+    const normalized = [...Array(5)].map((_, index) => {
+      const slide = carouselForm[index] || {};
+      return {
+        id: index + 1,
+        title: (slide.title || `Slide ${index + 1}`).trim(),
+        url: (slide.url || "").trim()
+      };
+    });
+
+    const hasEmptyImage = normalized.some((slide) => !slide.url);
+    if (hasEmptyImage) {
+      alert("Please provide an image URL or upload a file for all slides.");
+      return;
+    }
+
+    localStorage.setItem("carouselImages", JSON.stringify(normalized));
+    setCarouselItems(normalized);
+    setEditingCarousel(false);
+  };
+
+  const resetCarouselToDefault = () => {
+    localStorage.removeItem("carouselImages");
+    setCarouselItems(DEFAULT_CAROUSEL_IMAGES);
+    setCarouselForm(DEFAULT_CAROUSEL_IMAGES);
+    setEditingCarousel(false);
+  };
 
   useEffect(() => {
     setCheckingAuth(true);
@@ -106,42 +184,77 @@ export default function Admin({ onPageChange, onLogout }) {
       });
       const productsData = await productsRes.json();
       if (productsData.success) {
-        setProducts(productsData.data);
+        setProducts(productsData.data || []);
+      } else {
+        setProducts([]);
       }
 
-      const ordersRes = await fetch(`${API_BASE_URL}/admin/orders`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const ordersData = await ordersRes.json();
-      if (ordersData.success) {
-        setOrders(ordersData.data);
+      try {
+        const ordersRes = await fetch(`${API_BASE_URL}/admin/orders`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const ordersData = await ordersRes.json();
+        if (ordersData.success) {
+          setOrders(ordersData.data || []);
+        } else {
+          setOrders([]);
+        }
+
+        const totalRevenue = (ordersData.data || []).reduce((sum, order) => sum + (order.total || 0), 0);
+        setStats(prev => ({
+          ...prev,
+          totalOrders: (ordersData.data || []).length,
+          totalRevenue,
+        }));
+      } catch (e) {
+        console.error("Error fetching orders:", e);
+        setOrders([]);
       }
 
-      // Fetch notifications
-      const notificationsRes = await fetch(`${API_BASE_URL}/admin/notifications`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const notificationsData = await notificationsRes.json();
-      if (notificationsData.success) {
-        setNotifications(notificationsData.data);
+      try {
+        const notificationsRes = await fetch(`${API_BASE_URL}/admin/notifications`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const notificationsData = await notificationsRes.json();
+        if (notificationsData.success) {
+          setNotifications(notificationsData.data || []);
+        }
+
+        const unreadRes = await fetch(`${API_BASE_URL}/admin/notifications/unread-count`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const unreadData = await unreadRes.json();
+        if (unreadData.success) {
+          setUnreadCount(unreadData.count || 0);
+        }
+      } catch (e) {
+        console.error("Error fetching notifications:", e);
       }
 
-      // Fetch unread count
-      const unreadRes = await fetch(`${API_BASE_URL}/admin/notifications/unread-count`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const unreadData = await unreadRes.json();
-      if (unreadData.success) {
-        setUnreadCount(unreadData.count);
-      }
+      setStats(prev => ({
+        ...prev,
+        totalProducts: productsData.data?.length || 0
+      }));
 
-      const totalRevenue = ordersData.data?.reduce((sum, order) => sum + (order.total || 0), 0) || 0;
-      setStats({
-        totalProducts: productsData.data?.length || 0,
-        totalOrders: ordersData.data?.length || 0,
-        totalRevenue,
-        totalUsers: 1
-      });
+      try {
+        console.log("Fetching users with token:", token ? "yes" : "no");
+        const usersRes = await fetch(`${API_BASE_URL}/admin/users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const usersData = await usersRes.json();
+        console.log("Users response status:", usersRes.status);
+        console.log("Users data:", JSON.stringify(usersData));
+        if (usersData.success) {
+          const nonAdminUsers = (usersData.data || []).filter((user) => user.role !== "admin");
+          setUsers(nonAdminUsers);
+        } else {
+          console.log("Users fetch failed:", usersData.message);
+          setUsers([]);
+        }
+      } catch (e) {
+        console.error("Error fetching users:", e.message);
+        setUsers([]);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -161,17 +274,22 @@ export default function Admin({ onPageChange, onLogout }) {
 
       const data = await response.json();
 
-      if (data.success && data.data.role === "admin") {
-        localStorage.setItem("adminToken", data.data.token);
-        localStorage.setItem("adminUser", JSON.stringify(data.data));
-        setAdminUser(data.data);
-        setIsAuthenticated(true);
-        fetchData(data.data.token);
+      if (data.success) {
+        if (data.data.role === "admin") {
+          localStorage.setItem("adminToken", data.data.token);
+          localStorage.setItem("adminUser", JSON.stringify(data.data));
+          setAdminUser(data.data);
+          setIsAuthenticated(true);
+          fetchData(data.data.token);
+        } else {
+          setLoginError("Access denied. Admin only.");
+        }
       } else {
-        setLoginError(data.message || "Invalid credentials or not an admin");
+        setLoginError(data.message || "Invalid credentials");
       }
     } catch (err) {
-      setLoginError("Network error. Please try again.");
+      console.error("Login error:", err);
+      setLoginError("Cannot connect to server. Is backend running?");
     } finally {
       setLoginLoading(false);
     }
@@ -378,82 +496,82 @@ export default function Admin({ onPageChange, onLogout }) {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "Pending": return "bg-yellow-100 text-yellow-800";
-      case "Processing": return "bg-blue-100 text-blue-800";
-      case "Shipped": return "bg-purple-100 text-purple-800";
-      case "Delivered": return "bg-green-100 text-green-800";
-      case "Cancelled": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "Pending": return "bg-gray-800 text-gray-200";
+      case "Processing": return "bg-gray-700 text-gray-200";
+      case "Shipped": return "bg-gray-600 text-gray-200";
+      case "Delivered": return "bg-gray-500 text-white";
+      case "Cancelled": return "bg-gray-900 text-gray-400";
+      default: return "bg-gray-800 text-gray-200";
     }
   };
 
   if (checkingAuth) {
     return (
-      <div className="min-h-full bg-gradient-to-b from-slate-50 via-blue-50 to-teal-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-teal-600"></div>
+      <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-gray-400"></div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-full bg-gradient-to-br from-slate-800 via-blue-900 to-teal-800 flex items-center justify-center py-12 px-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+      <div className="min-h-full bg-gray-900 flex items-center justify-center py-12 px-4">
+        <div className="bg-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-md border border-gray-700">
           <div className="text-center mb-8">
-            <div className="bg-teal-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="text-teal-600" size={32} />
-            </div>
-            <h2 className="text-3xl font-bold text-gray-800">Admin Login</h2>
-            <p className="text-gray-600 mt-2">Sign in to access the admin panel</p>
+             <div className="bg-gray-700 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Lock className="text-gray-300" size={32} />
+             </div>
+             <h2 className="text-3xl font-bold text-white">Admin Login</h2>
+             <p className="text-gray-400 mt-2">Sign in to access the admin panel</p>
           </div>
 
           {loginError && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
+            <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-lg mb-4">
               {loginError}
             </div>
           )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+              <label className="block text-sm font-semibold text-gray-300 mb-2">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 text-gray-400" size={20} />
-                <input
-                  type="email"
-                  value={loginForm.email}
-                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500 transition"
-                  required
-                />
+                 <input
+                   type="email"
+                   value={loginForm.email}
+                   onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                   className="w-full pl-10 pr-4 py-2 border-2 border-gray-600 rounded-lg bg-gray-700 text-white focus:border-gray-400 transition"
+                   required
+                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+              <label className="block text-sm font-semibold text-gray-300 mb-2">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
-                <input
-                  type="password"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500 transition"
-                  required
-                />
+                 <input
+                   type="password"
+                   value={loginForm.password}
+                   onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                   className="w-full pl-10 pr-4 py-2 border-2 border-gray-600 rounded-lg bg-gray-700 text-white focus:border-gray-400 transition"
+                   required
+                 />
               </div>
             </div>
 
             <button
               type="submit"
               disabled={loginLoading}
-              className="w-full bg-gradient-to-r from-blue-700 to-teal-600 text-white font-bold py-3 rounded-lg hover:shadow-lg transition disabled:opacity-50"
+              className="w-full bg-gray-700 text-white font-bold py-3 rounded-lg hover:bg-gray-600 transition disabled:opacity-50"
             >
               {loginLoading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
-          <button
+<button
             onClick={() => onPageChange("Home")}
-            className="w-full mt-4 border-2 border-gray-300 text-gray-700 font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
+            className="w-full mt-4 border-2 border-gray-600 text-gray-300 font-semibold py-2 rounded-lg hover:bg-gray-700 transition"
           >
             Back to Home
           </button>
@@ -463,9 +581,9 @@ export default function Admin({ onPageChange, onLogout }) {
   }
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-slate-50 via-blue-50 to-teal-50">
+    <div className="min-h-full bg-gray-900">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-800 via-teal-700 to-teal-600 text-white py-4 px-6 shadow-lg">
+        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-4 px-6 shadow-lg">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
             <h1 className="text-2xl font-bold">Admin Panel</h1>
@@ -494,11 +612,11 @@ export default function Admin({ onPageChange, onLogout }) {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-4">
-              <div className="bg-teal-100 p-3 rounded-lg">
-                <Package className="text-teal-600" size={24} />
+               <div className="bg-gray-100 p-3 rounded-lg">
+                 <Package className="text-gray-600" size={24} />
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Total Products</p>
@@ -508,8 +626,8 @@ export default function Admin({ onPageChange, onLogout }) {
           </div>
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-4">
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <ShoppingCart className="text-blue-600" size={24} />
+               <div className="bg-gray-100 p-3 rounded-lg">
+                 <ShoppingCart className="text-gray-600" size={24} />
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Total Orders</p>
@@ -519,23 +637,12 @@ export default function Admin({ onPageChange, onLogout }) {
           </div>
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-4">
-              <div className="bg-green-100 p-3 rounded-lg">
-                <DollarSign className="text-green-600" size={24} />
+              <div className="bg-gray-100 p-3 rounded-lg">
+                <DollarSign className="text-gray-600" size={24} />
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Total Revenue</p>
                 <p className="text-2xl font-bold text-gray-800">₹{stats.totalRevenue?.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center gap-4">
-              <div className="bg-teal-100 p-3 rounded-lg">
-                <Users className="text-teal-600" size={24} />
-              </div>
-              <div>
-                <p className="text-gray-600 text-sm">Total Users</p>
-                <p className="text-2xl font-bold text-gray-800">{stats.totalUsers}</p>
               </div>
             </div>
           </div>
@@ -546,36 +653,50 @@ export default function Admin({ onPageChange, onLogout }) {
           <div className="flex border-b">
             <button
               onClick={() => setActiveTab("dashboard")}
-              className={`px-6 py-4 font-semibold transition ${activeTab === "dashboard" ? "border-b-2 border-teal-600 text-teal-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-6 py-4 font-semibold transition ${activeTab === "dashboard" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <BarChart3 className="inline mr-2" size={20} />
               Dashboard
             </button>
             <button
               onClick={() => setActiveTab("products")}
-              className={`px-6 py-4 font-semibold transition ${activeTab === "products" ? "border-b-2 border-teal-600 text-teal-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-6 py-4 font-semibold transition ${activeTab === "products" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <Package className="inline mr-2" size={20} />
               Products
             </button>
             <button
               onClick={() => setActiveTab("orders")}
-              className={`px-6 py-4 font-semibold transition ${activeTab === "orders" ? "border-b-2 border-teal-600 text-teal-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-6 py-4 font-semibold transition ${activeTab === "orders" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <ShoppingCart className="inline mr-2" size={20} />
               Orders
             </button>
             <button
               onClick={() => setActiveTab("notifications")}
-              className={`px-6 py-4 font-semibold transition relative ${activeTab === "notifications" ? "border-b-2 border-teal-600 text-teal-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-6 py-4 font-semibold transition relative ${activeTab === "notifications" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <Bell className="inline mr-2" size={20} />
               Notifications
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-gray-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab("users")}
+              className={`px-6 py-4 font-semibold transition ${activeTab === "users" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+            >
+              <Users className="inline mr-2" size={20} />
+              Users
+            </button>
+            <button
+              onClick={() => setActiveTab("carousel")}
+              className={`px-6 py-4 font-semibold transition ${activeTab === "carousel" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+            >
+              <TrendingUp className="inline mr-2" size={20} />
+              Carousel
             </button>
           </div>
         </div>
@@ -585,7 +706,7 @@ export default function Admin({ onPageChange, onLogout }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <TrendingUp className="text-teal-600" size={24} />
+                <TrendingUp className="text-gray-600" size={24} />
                 Recent Orders
               </h3>
               <div className="space-y-4">
@@ -611,7 +732,7 @@ export default function Admin({ onPageChange, onLogout }) {
 
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Package className="text-red-600" size={24} />
+                <Package className="text-gray-600" size={24} />
                 Low Stock Products
               </h3>
               <div className="space-y-4">
@@ -622,7 +743,7 @@ export default function Admin({ onPageChange, onLogout }) {
                         <p className="font-semibold">{product.name}</p>
                         <p className="text-gray-600 text-sm">{product.category}</p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm ${product.stock === 0 ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
+                      <span className={`px-3 py-1 rounded-full text-sm ${product.stock === 0 ? "bg-gray-100 text-gray-800" : "bg-gray-200 text-gray-800"}`}>
                         {product.stock} left
                       </span>
                     </div>
@@ -643,7 +764,7 @@ export default function Admin({ onPageChange, onLogout }) {
               <h3 className="text-xl font-bold text-gray-800">Products ({products.length})</h3>
               <button
                 onClick={handleAddProduct}
-                className="bg-gradient-to-r from-blue-700 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
+                className="bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
               >
                 <Plus size={20} />
                 Add Product
@@ -669,7 +790,7 @@ export default function Admin({ onPageChange, onLogout }) {
                       <td className="px-6 py-4 text-gray-600">{product.category}</td>
                       <td className="px-6 py-4 text-gray-600">₹{product.price?.toLocaleString()}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-sm ${product.stock === 0 ? "bg-red-100 text-red-800" : product.stock < 10 ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
+                        <span className={`px-2 py-1 rounded-full text-sm ${product.stock === 0 ? "bg-gray-100 text-gray-800" : product.stock < 10 ? "bg-gray-200 text-gray-800" : "bg-gray-300 text-gray-800"}`}>
                           {product.stock}
                         </span>
                       </td>
@@ -677,13 +798,13 @@ export default function Admin({ onPageChange, onLogout }) {
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleEditProduct(product)}
-                            className="bg-blue-100 hover:bg-blue-200 text-blue-600 p-2 rounded-lg transition"
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
                           >
                             <Edit2 size={18} />
                           </button>
                           <button
                             onClick={() => handleDeleteProduct(product._id)}
-                            className="bg-red-100 hover:bg-red-200 text-red-600 p-2 rounded-lg transition"
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
                           >
                             <Trash2 size={18} />
                           </button>
@@ -714,9 +835,11 @@ export default function Admin({ onPageChange, onLogout }) {
                   <tr>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Order ID</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Customer</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Email</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Items</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Total</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Payment</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Location</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Date</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Actions</th>
@@ -728,8 +851,8 @@ export default function Admin({ onPageChange, onLogout }) {
                       <td className="px-6 py-4 text-gray-600">#{order.id || order._id?.slice(-6)}</td>
                       <td className="px-6 py-4">
                         <p className="font-semibold">{order.user_name || "Customer"}</p>
-                        <p className="text-gray-600 text-sm">{order.user_email || ""}</p>
                       </td>
+                      <td className="px-6 py-4 text-gray-600 text-sm">{order.user_email || "-"}</td>
                       <td className="px-6 py-4 text-gray-600">{order.items?.length || 0} items</td>
                       <td className="px-6 py-4 font-semibold">₹{order.total?.toLocaleString()}</td>
                       <td className="px-6 py-4">
@@ -737,6 +860,7 @@ export default function Admin({ onPageChange, onLogout }) {
                           {order.status}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-gray-600 text-sm">{order.payment_method || "Prepaid"}</td>
                       <td className="px-6 py-4 text-gray-600">
                         {order.tracking_location || "Not set"}
                       </td>
@@ -745,10 +869,10 @@ export default function Admin({ onPageChange, onLogout }) {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => setSelectedOrder(order)}
-                            className="bg-teal-100 hover:bg-teal-200 text-teal-600 p-2 rounded-lg transition"
-                          >
+                            <button
+                              onClick={() => setSelectedOrder(order)}
+                              className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
+                            >
                             <Eye size={18} />
                           </button>
                           <div className="flex flex-col gap-2">
@@ -773,7 +897,7 @@ export default function Admin({ onPageChange, onLogout }) {
                               />
                               <button
                                 onClick={() => handleUpdateOrderStatus(order.id || order._id, order.status, trackingInputs[order.id || order._id] ?? order.tracking_location ?? "")}
-                                className="bg-teal-100 hover:bg-teal-200 text-teal-600 p-2 rounded-lg transition"
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
                               >
                                 Save
                               </button>
@@ -781,7 +905,7 @@ export default function Admin({ onPageChange, onLogout }) {
                           </div>
                           <button
                             onClick={() => handleDeleteOrder(order.id || order._id)}
-                            className="bg-red-100 hover:bg-red-200 text-red-600 p-2 rounded-lg transition"
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
                           >
                             <Trash2 size={18} />
                           </button>
@@ -799,9 +923,164 @@ export default function Admin({ onPageChange, onLogout }) {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Product Modal */}
+        {/* Users Tab */}
+        {activeTab === "users" && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h3 className="text-xl font-bold text-gray-800">All Users</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">User</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Email</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Phone</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">City</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">State</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">ZIP</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Country</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Role</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Orders</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Joined</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id || user._id} className="border-b hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <p className="font-semibold">{user.name}</p>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{user.email}</td>
+                      <td className="px-6 py-4 text-gray-600">{user.phone || "-"}</td>
+                      <td className="px-6 py-4 text-gray-600">{user.city || "-"}</td>
+                      <td className="px-6 py-4 text-gray-600">{user.state || "-"}</td>
+                      <td className="px-6 py-4 text-gray-600">{user.zipCode || "-"}</td>
+                      <td className="px-6 py-4 text-gray-600">{user.country || "-"}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-sm ${user.role === "admin" ? "bg-gray-800 text-white" : "bg-gray-200 text-gray-700"}`}>
+                          {user.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {user.orderCount || 0}
+                      </td>
+                      <td className="px-6 py-4 text-gray-600 text-sm">
+                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {users.length === 0 && (
+                <div className="p-8 text-center text-gray-600">
+                  No users found.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "carousel" && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">Manage Carousel</h3>
+              <button
+                onClick={openCarouselEditor}
+                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition"
+              >
+                Edit Carousel
+              </button>
+            </div>
+            
+            {editingCarousel ? (
+              <div className="space-y-4">
+                <p className="text-gray-600">Edit slide titles, paste image URLs, or upload image files for each slide.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div key={i} className="border rounded-lg p-4">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Slide {i + 1}</label>
+                      {carouselForm[i]?.url && (
+                        <img 
+                          src={carouselForm[i].url} 
+                          alt={`Slide ${i+1}`}
+                          className="w-full h-24 object-cover rounded mb-2"
+                          onError={(e) => e.target.style.display = 'none'}
+                        />
+                      )}
+                      <input
+                        type="text"
+                        value={carouselForm[i]?.title || ""}
+                        onChange={(e) => handleCarouselFieldChange(i, "title", e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500 mb-2"
+                        placeholder="Enter title"
+                      />
+                      <input
+                        type="text"
+                        value={carouselForm[i]?.url || ""}
+                        onChange={(e) => handleCarouselFieldChange(i, "url", e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500 mb-2"
+                        placeholder="Paste image URL or /images/file.jpg"
+                      />
+                      <label className="w-full inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg cursor-pointer transition">
+                        <Upload size={16} />
+                        Upload Image
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleCarouselImageFileChange(i, e.target.files?.[0])}
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex gap-4 mt-6">
+                  <button
+                    onClick={saveCarouselChanges}
+                    className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition"
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    onClick={resetCarouselToDefault}
+                    className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400 transition"
+                  >
+                    Reset to Default
+                  </button>
+                  <button
+                    onClick={() => setEditingCarousel(false)}
+                    className="border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-gray-600 mb-4">Current carousel slides (shown on home page):</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {carouselItems.map((item, i) => (
+                 <div key={i} className="border rounded-lg p-4 bg-gray-50">
+                   <img src={item.url} alt={item.title} className="w-full h-24 object-cover rounded mb-2" />
+                   <p className="font-semibold">{i + 1}. {item.title}</p>
+                 </div>
+                  ))}
+                </div>
+                <button
+                  onClick={openCarouselEditor}
+                  className="mt-6 bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition"
+                >
+                  Edit Carousel
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+</div>
+
       {showProductModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg w-full max-w-lg p-6">
@@ -821,7 +1100,7 @@ export default function Admin({ onPageChange, onLogout }) {
                   type="text"
                   value={productForm.name}
                   onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
                   required
                 />
               </div>
@@ -833,7 +1112,7 @@ export default function Admin({ onPageChange, onLogout }) {
                     type="number"
                     value={productForm.price}
                     onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
                     required
                   />
                 </div>
@@ -843,7 +1122,7 @@ export default function Admin({ onPageChange, onLogout }) {
                     type="number"
                     value={productForm.stock}
                     onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
                     required
                   />
                 </div>
@@ -854,7 +1133,7 @@ export default function Admin({ onPageChange, onLogout }) {
                 <select
                   value={productForm.category}
                   onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
                   required
                 >
                   <option value="">Select category</option>
@@ -870,7 +1149,7 @@ export default function Admin({ onPageChange, onLogout }) {
                 <textarea
                   value={productForm.description}
                   onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
                   rows="3"
                 />
               </div>
@@ -890,39 +1169,20 @@ export default function Admin({ onPageChange, onLogout }) {
                       />
                     </label>
                   </div>
-                  
-                  {/* Image Preview */}
+
                   {imagePreview && (
                     <div className="mt-4">
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="max-h-40 mx-auto rounded-lg"
-                      />
+                      <img src={imagePreview} alt="Preview" className="max-h-32 mx-auto rounded-lg" />
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectedImage(null);
-                          setImagePreview(null);
-                          setProductForm({ ...productForm, image_url: "" });
-                        }}
-                        className="mt-2 text-sm text-red-600 hover:text-red-800"
+                        onClick={() => { setSelectedImage(null); setImagePreview(null); }}
+                        className="mt-2 text-red-500 text-sm"
                       >
-                        Remove Image
+                        Remove
                       </button>
                     </div>
                   )}
-                  
-                  {/* OR separator */}
-                  {!imagePreview && (
-                    <div className="flex items-center gap-4 my-4">
-                      <div className="flex-1 h-px bg-gray-300"></div>
-                      <span className="text-sm text-gray-500">OR</span>
-                      <div className="flex-1 h-px bg-gray-300"></div>
-                    </div>
-                  )}
-                  
-                  {/* URL Input as alternative */}
+
                   {!imagePreview && (
                     <input
                       type="text"
@@ -932,7 +1192,7 @@ export default function Admin({ onPageChange, onLogout }) {
                         setSelectedImage(null);
                         setImagePreview(e.target.value);
                       }}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
                       placeholder="Enter image URL (e.g., /images/SHOE1.jpg)"
                     />
                   )}
@@ -950,7 +1210,7 @@ export default function Admin({ onPageChange, onLogout }) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-700 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700"
                 >
                   {editingProduct ? "Update" : "Add"} Product
                 </button>
@@ -965,10 +1225,10 @@ export default function Admin({ onPageChange, onLogout }) {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-              <Bell className="text-teal-600" size={28} />
+              <Bell className="text-gray-600" size={28} />
               Notifications
             </h2>
-            <span className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-sm font-semibold">
+            <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm font-semibold">
               {unreadCount} unread
             </span>
           </div>
@@ -983,14 +1243,14 @@ export default function Admin({ onPageChange, onLogout }) {
               {notifications.map((notification) => (
                 <div
                   key={notification.id || notification._id}
-                  className={`border rounded-lg p-4 ${!notification.is_read ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}
+                  className={`border rounded-lg p-4 ${!notification.is_read ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'}`}
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <h3 className="font-semibold text-gray-800">{notification.title}</h3>
                         {!notification.is_read && (
-                          <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">New</span>
+                          <span className="bg-gray-500 text-white text-xs px-2 py-1 rounded-full">New</span>
                         )}
                       </div>
                       <p className="text-gray-600 mb-2">{notification.message}</p>
@@ -1002,7 +1262,7 @@ export default function Admin({ onPageChange, onLogout }) {
                     {!notification.is_read && (
                       <button
                         onClick={() => markNotificationAsRead(notification.id || notification._id)}
-                        className="ml-4 bg-teal-100 hover:bg-teal-200 text-teal-600 p-2 rounded-lg transition"
+                        className="ml-4 bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
                         title="Mark as read"
                       >
                         <CheckCircle size={18} />
@@ -1042,7 +1302,7 @@ export default function Admin({ onPageChange, onLogout }) {
               </div>
 
               {selectedOrder.cancellation_reason && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                <div className="bg-gray-100 border-l-4 border-gray-500 p-4 rounded">
                   <p className="text-sm text-gray-600 font-semibold">Cancellation Reason</p>
                   <p className="text-gray-800">{selectedOrder.cancellation_reason}</p>
                 </div>

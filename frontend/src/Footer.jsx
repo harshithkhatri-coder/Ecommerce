@@ -21,30 +21,30 @@ export default function Footer({ onPageChange }) {
 
   return (
     <>
-      <footer className="bg-gradient-to-b from-gray-900 via-slate-900 to-black text-gray-200 pt-8 md:pt-12 pb-6 mt-8 md:mt-12 shadow-2xl">
+      <footer className="bg-gradient-to-b from-gray-900 via-gray-950 to-black text-gray-200 pt-8 md:pt-12 pb-6 mt-8 md:mt-12 shadow-2xl">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           {/* Main Footer Content */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 mb-8">
             {/* About Section */}
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <img
+                 <img
                   src={SHOE1}
                   alt="VELUX KICKS Logo"
-                  className="w-12 h-12 rounded-full border-2 border-teal-500 object-cover"
+                  className="w-12 h-12 rounded-full border-2 border-gray-400 object-cover"
                 />
                 <h3 className="text-white text-lg font-bold">VELUX KICKS</h3>
               </div>
-              <p className="text-gray-400 text-sm leading-relaxed mb-4">
+               <p className="text-white text-sm leading-relaxed mb-4">
                 Your trusted destination for premium products and exceptional customer service.
               </p>
               <div className="flex gap-3">
                 <a href="https://www.instagram.com/veluxkicks/" target="_blank" rel="noopener noreferrer" className="inline-block">
-                  <div className="bg-teal-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 hover:bg-teal-700 transition cursor-pointer">
+                   <div className="bg-gray-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 hover:bg-gray-700 transition cursor-pointer">
                     <Instagram size={24} />
                   </div>
                 </a>
-                <a href="https://www.instagram.com/veluxkicks/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition font-semibold">
+                 <a href="https://www.instagram.com/veluxkicks/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition font-semibold">
                   veluxkicks
                 </a>
               </div>
@@ -55,11 +55,11 @@ export default function Footer({ onPageChange }) {
               <h3 className="text-white text-lg font-bold mb-4">Quick Links</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <button
-                    type="button"
-                    onClick={() => onPageChange && onPageChange("Home")}
-                    className="text-gray-400 hover:text-white transition"
-                  >
+                   <button
+                     type="button"
+                     onClick={() => onPageChange && onPageChange("Home")}
+                     className="text-gray-300 hover:text-white transition"
+                   >
                     Home
                   </button>
                 </li>
@@ -67,7 +67,7 @@ export default function Footer({ onPageChange }) {
                   <button
                     type="button"
                     onClick={() => onPageChange && onPageChange("About")}
-                    className="text-gray-400 hover:text-white transition"
+                    className="text-gray-300 hover:text-white transition"
                   >
                     About Us
                   </button>
@@ -76,7 +76,7 @@ export default function Footer({ onPageChange }) {
                   <button
                     type="button"
                     onClick={() => onPageChange && onPageChange("Products")}
-                    className="text-gray-400 hover:text-white transition"
+                    className="text-gray-300 hover:text-white transition"
                   >
                     Products
                   </button>
@@ -91,7 +91,7 @@ export default function Footer({ onPageChange }) {
                 <li>
                   <button 
                     onClick={() => openModal('shipping')}
-                    className="text-gray-400 hover:text-white transition"
+                    className="text-gray-300 hover:text-white transition"
                   >
                     Shipping Info
                   </button>
@@ -99,7 +99,7 @@ export default function Footer({ onPageChange }) {
                 <li>
                   <button 
                     onClick={() => openModal('tracking')}
-                    className="text-gray-400 hover:text-white transition"
+                    className="text-gray-300 hover:text-white transition"
                   >
                     Track Order
                   </button>
@@ -107,7 +107,7 @@ export default function Footer({ onPageChange }) {
                 <li>
                   <button 
                     onClick={() => openModal('privacy')}
-                    className="text-gray-400 hover:text-white transition"
+                    className="text-gray-300 hover:text-white transition"
                   >
                     Privacy Policy
                   </button>
@@ -115,7 +115,7 @@ export default function Footer({ onPageChange }) {
                 <li>
                   <button 
                     onClick={() => openModal('terms')}
-                    className="text-gray-400 hover:text-white transition"
+                    className="text-gray-300 hover:text-white transition"
                   >
                     Terms & Conditions
                   </button>
@@ -128,19 +128,19 @@ export default function Footer({ onPageChange }) {
               <h3 className="text-white text-lg font-bold mb-4">Contact Us</h3>
               <div className="space-y-3 text-sm">
                 <div className="flex items-start gap-3">
-                  <Mail size={18} className="text-teal-500 mt-1 flex-shrink-0" />
+                  <Mail size={18} className="text-gray-400 mt-1 flex-shrink-0" />
                   <div>
                     <p className="text-gray-400">Email</p>
-                    <a href="mailto: veluxkicks11@gmail.com" className="text-white hover:text-teal-400 transition">
+                     <a href="mailto: veluxkicks11@gmail.com" className="text-white hover:text-gray-300 transition">
                     veluxkicks11@gmail.com
                     </a>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Phone size={18} className="text-teal-500 mt-1 flex-shrink-0" />
+                  <Phone size={18} className="text-gray-400 mt-1 flex-shrink-0" />
                   <div>
                     <p className="text-gray-400">Phone</p>
-                    <a href="tel:+91-7676526644" className="text-white hover:text-teal-400 transition">
+                     <a href="tel:+91-7676526644" className="text-white hover:text-gray-300 transition">
                       +91 7676526644
                     </a>
                   </div>

@@ -10,6 +10,7 @@ import Profile from "./Profile";
 import Admin from "./Admin";
 import Footer from "./Footer";
 import SearchPage from "./SearchPage";
+import AddAddress from "./AddAddress";
 import './App.css';
 
 export default function App() {
@@ -118,6 +119,8 @@ export default function App() {
         return <Login onPageChange={handlePageChange} />;
       case "Profile":
         return <Profile onPageChange={handlePageChange} />;
+      case "AddAddress":
+        return <AddAddress onPageChange={handlePageChange} user={user} />;
       case "Search":
         return <SearchPage searchQuery="" onPageChange={handlePageChange} onAddToCart={addToCart} />;
       case "Admin":
@@ -143,13 +146,13 @@ export default function App() {
         return <Admin onPageChange={handlePageChange} onLogout={handleLogout} />;
       case "Contact":
         return (
-          <div className="min-h-full bg-gradient-to-b from-blue-50 via-teal-50 to-cyan-50 flex items-center justify-center py-12">
-            <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-teal-600 bg-clip-text text-transparent mb-4">Contact Us</h2>
+          <div className="min-h-full bg-gradient-to-b from-gray-50 via-gray-100 to-white flex items-center justify-center py-12">
+            <div className="bg-gray-900 rounded-lg shadow-lg p-8 max-w-md w-full">
+              <h2 className="text-3xl font-bold text-white mb-4">Contact Us</h2>
               <p className="text-gray-700 mb-4">
                 For any inquiries or support, please reach out to us:
               </p>
-              <div className="space-y-3 text-gray-700">
+               <div className="space-y-3 text-white">
                 <p><strong>Email:</strong> support@veluxkicks.com</p>
                 <p><strong>Phone:</strong> +1 (800) 123-4567</p>
                 <p><strong>Address:</strong> 123 Commerce Street, Business City, BC 12345</p>
@@ -167,7 +170,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-950 to-black flex flex-col">
       {/* Header with Navigation */}
       <Header 
         currentPage={currentPage} 

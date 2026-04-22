@@ -10,9 +10,10 @@ const mongoose = require("mongoose");
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "velux_kicks_secret_key_2024";
+
 const MONGO_URI =
   process.env.MONGO_URI ||
-  "mongodb+srv://gowdarakshith4663_db_user:gowdaatlas@velux.ofigioe.mongodb.net/ecommerce?retryWrites=true&w=majority";
+  "mongodb+srv://harshithkhatri_db_user:ChhMlZS6skY6WfeP@cluster0.l1vghag.mongodb.net/ecommerce?retryWrites=true&w=majority&appName=Cluster0";
 
 // ===== MONGODB CONNECTION =====
 const safeMongoUri = MONGO_URI.replace(/:([^:@]+)@/, ":****@");
@@ -123,13 +124,54 @@ async function createNotification(type, title, message, orderId = null, userId =
   }
 }
 
+// Admin authentication middleware
+const authenticateAdmin = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ success: false, message: "No token provided" });
+  }
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.id);
+    if (!user || user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+    req.adminUser = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ success: false, message: "Invalid token" });
+  }
+};
+
 // ===== Middleware =====
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(express.json());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Serve static images from public folder
 app.use('/images', express.static(path.join(__dirname, 'public/images')));
+
+// ===== TEST ENDPOINTS =====
+app.get("/api/test", async (req, res) => {
+  try {
+    const count = await User.countDocuments();
+    res.json({ success: true, message: "Database connected!", userCount: count });
+  } catch (err) {
+    res.json({ success: false, message: "Database error: " + err.message });
+  }
+});
+
+// Simple test registration (for testing only)
+app.post("/api/test-register", async (req, res) => {
+  console.log("Test register:", req.body);
+  res.json({ success: true, message: "Received data", data: req.body });
+});
 
 // ===== DATABASE SEEDING =====
 async function initializeDatabase() {
@@ -237,6 +279,11 @@ async function generateOrderId() {
   }
   return `ORD-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
+
+// ===== HEALTH CHECK =====
+app.get("/api/health", (req, res) => {
+  res.json({ success: true, message: "Server is running", timestamp: new Date() });
+});
 
 // ===== PRODUCT ENDPOINTS =====
 
@@ -595,10 +642,12 @@ app.put("/api/order-cancel/:orderId", cancelOrderHandler);
 
 // Register user
 app.post("/api/auth/register", async (req, res) => {
-  const { name, email, password, phone, address, city, state, zipCode, country } = req.body;
+  console.log("Register request body:", req.body);
+  const { name, email, password } = req.body;
 
-  if (!name || !email || !password || !phone) {
-    return res.status(400).json({ success: false, message: "Name, email, password, and phone are required" });
+  if (!name || !email || !password) {
+    console.log("Missing fields:", { name: !!name, email: !!email, password: !!password });
+    return res.status(400).json({ success: false, message: "Name, email, and password are required" });
   }
 
   try {
@@ -612,16 +661,21 @@ app.post("/api/auth/register", async (req, res) => {
     const user = await User.create({
       name,
       email,
-      password: hashedPassword,
-      phone,
-      address: address || "",
-      city: city || "",
-      state: state || "",
-      zip_code: zipCode || "",
-      country: country || ""
+      password: hashedPassword
     });
 
     const token = generateToken(user);
+    console.log("User registered:", user.email);
+
+    // Notify admin about new user
+    await createNotification(
+      "new_user",
+      "New User Signup",
+      `${user.name} (${user.email}) just signed up!`,
+      null,
+      user._id.toString(),
+      user.name
+    );
 
     res.status(201).json({
       success: true,
@@ -630,15 +684,9 @@ app.post("/api/auth/register", async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        phone: user.phone,
-        address: user.address,
-        city: user.city,
-        state: user.state,
-        zipCode: user.zip_code,
-        country: user.country,
         role: user.role,
-        token,
-      },
+        token
+      }
     });
   } catch (err) {
     console.error("Error registering user:", err);
@@ -648,17 +696,16 @@ app.post("/api/auth/register", async (req, res) => {
 
 // Login user
 app.post("/api/auth/login", async (req, res) => {
+  console.log("Login request:", req.body);
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({
-      success: false,
-      message: "Email and password required",
-    });
+    return res.status(400).json({ success: false, message: "Email and password required" });
   }
 
   try {
     const user = await User.findOne({ email });
+    console.log("User found:", user ? user.email : "NOT FOUND");
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
@@ -669,6 +716,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     const token = generateToken(user);
+    console.log("Login success:", user.email, "role:", user.role);
 
     res.json({
       success: true,
@@ -684,8 +732,8 @@ app.post("/api/auth/login", async (req, res) => {
         zipCode: user.zip_code,
         country: user.country,
         role: user.role,
-        token,
-      },
+        token
+      }
     });
   } catch (err) {
     console.error("Error logging in:", err);
@@ -804,7 +852,18 @@ app.put("/api/auth/profile", async (req, res) => {
     res.json({
       success: true,
       message: "Profile updated successfully",
-      data: toPlainObj(user),
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
+        city: user.city,
+        state: user.state,
+        zipCode: user.zip_code,
+        country: user.country,
+        role: user.role,
+      },
     });
   } catch (err) {
     console.error("Error updating profile:", err);
@@ -957,7 +1016,7 @@ app.get("/api/stats", async (req, res) => {
 // ===== ADMIN PRODUCT ENDPOINTS =====
 
 // Add product (Admin)
-app.post("/api/admin/products", async (req, res) => {
+app.post("/api/admin/products", authenticateAdmin, async (req, res) => {
   const { name, price, category, stock, description, image_url } = req.body;
 
   if (!name || !price || !category) {
@@ -986,7 +1045,7 @@ app.post("/api/admin/products", async (req, res) => {
 });
 
 // Update product (Admin)
-app.put("/api/admin/products/:id", async (req, res) => {
+app.put("/api/admin/products/:id", authenticateAdmin, async (req, res) => {
   const { name, price, category, stock, description, image_url } = req.body;
 
   try {
@@ -1019,7 +1078,7 @@ app.put("/api/admin/products/:id", async (req, res) => {
 });
 
 // Delete product (Admin)
-app.delete("/api/admin/products/:id", async (req, res) => {
+app.delete("/api/admin/products/:id", authenticateAdmin, async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) {
@@ -1042,7 +1101,7 @@ app.delete("/api/admin/products/:id", async (req, res) => {
 // ===== ADMIN ORDER ENDPOINTS =====
 
 // Get all orders with user info (Admin)
-app.get("/api/admin/orders", async (req, res) => {
+app.get("/api/admin/orders", authenticateAdmin, async (req, res) => {
   try {
     const orders = await Order.find().sort({ created_at: -1 });
 
@@ -1058,7 +1117,7 @@ app.get("/api/admin/orders", async (req, res) => {
 });
 
 // Get single order with details (Admin)
-app.get("/api/admin/orders/:id", async (req, res) => {
+app.get("/api/admin/orders/:id", authenticateAdmin, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) {
@@ -1076,7 +1135,7 @@ app.get("/api/admin/orders/:id", async (req, res) => {
 });
 
 // Update order status (Admin)
-app.put("/api/admin/orders/:id/status", async (req, res) => {
+app.put("/api/admin/orders/:id/status", authenticateAdmin, async (req, res) => {
   const { status, tracking_location } = req.body;
   const validStatuses = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
 
@@ -1127,7 +1186,7 @@ app.put("/api/admin/orders/:id/status", async (req, res) => {
 });
 
 // Delete order (Admin)
-app.delete("/api/admin/orders/:id", async (req, res) => {
+app.delete("/api/admin/orders/:id", authenticateAdmin, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) {
@@ -1146,8 +1205,38 @@ app.delete("/api/admin/orders/:id", async (req, res) => {
   }
 });
 
+// Get all users (Admin)
+app.get("/api/admin/users", authenticateAdmin, async (req, res) => {
+  console.log("Admin users request received");
+  try {
+    const users = await User.find().select("-password").sort({ created_at: -1 });
+    console.log("Found users:", users.length);
+    const usersWithOrders = await Promise.all(users.map(async (user) => {
+      const orderCount = await Order.countDocuments({ user_id: user._id.toString() });
+      return {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
+        city: user.city,
+        state: user.state,
+        zipCode: user.zip_code,
+        country: user.country,
+        role: user.role,
+        created_at: user.created_at,
+        orderCount
+      };
+    }));
+    res.json({ success: true, data: usersWithOrders });
+  } catch (err) {
+    console.error("Error fetching users:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch users" });
+  }
+});
+
 // ===== ADMIN STATS ENDPOINT =====
-app.get("/api/admin/stats", async (req, res) => {
+app.get("/api/admin/stats", authenticateAdmin, async (req, res) => {
   try {
     const totalProducts = await Product.countDocuments();
     const totalOrders = await Order.countDocuments();
@@ -1190,7 +1279,7 @@ app.get("/api/health", (req, res) => {
 // ===== NOTIFICATION ENDPOINTS =====
 
 // Get all notifications (Admin only)
-app.get("/api/admin/notifications", async (req, res) => {
+app.get("/api/admin/notifications", authenticateAdmin, async (req, res) => {
   try {
     const notifications = await Notification.find().sort({ created_at: -1 });
     res.json({
@@ -1205,7 +1294,7 @@ app.get("/api/admin/notifications", async (req, res) => {
 });
 
 // Mark notification as read (Admin only)
-app.put("/api/admin/notifications/:id/read", async (req, res) => {
+app.put("/api/admin/notifications/:id/read", authenticateAdmin, async (req, res) => {
   try {
     const notification = await Notification.findByIdAndUpdate(
       req.params.id,
@@ -1229,7 +1318,7 @@ app.put("/api/admin/notifications/:id/read", async (req, res) => {
 });
 
 // Get unread notification count (Admin only)
-app.get("/api/admin/notifications/unread-count", async (req, res) => {
+app.get("/api/admin/notifications/unread-count", authenticateAdmin, async (req, res) => {
   try {
     const count = await Notification.countDocuments({ is_read: false });
     res.json({
@@ -1251,14 +1340,25 @@ app.use((req, res) => {
 });
 
 // ===== START SERVER =====
-// Only start the server if not running on Vercel
-if (process.env.VERCEL === undefined) {
-  const server = app.listen(PORT, async () => {
-    console.log(`\n✅ Server running on http://localhost:${PORT}`);
-    console.log(`📦 Database: MongoDB`);
-    console.log(`🔐 JWT Secret: ${JWT_SECRET.substring(0, 8)}...`);
-  });
-}
+const server = app.listen(PORT, async () => {
+  console.log(`\n✅ Server running on http://localhost:${PORT}`);
+  console.log(`📦 Database: MongoDB`);
+  console.log(`🔐 JWT Secret: ${JWT_SECRET.substring(0, 8)}...`);
+});
 
-// Vercel serverless export
-module.exports = app;
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Shutting down server...');
+  server.close(() => {
+    console.log('✅ Server stopped');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('\n🛑 Shutting down server...');
+  server.close(() => {
+    console.log('✅ Server stopped');
+    process.exit(0);
+  });
+});

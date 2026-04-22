@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User, Mail, Phone, MapPin, Edit2, Save, X, Heart, ShoppingBag, LogOut } from "lucide-react";
+import { User, Mail, Phone, MapPin, Edit2, Save, X, Heart, ShoppingBag, LogOut, Plus } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
 
@@ -177,6 +177,7 @@ export default function Profile({ onPageChange }) {
         localStorage.setItem("user", JSON.stringify(updatedUser));
         setProfileData(editData);
         setIsEditing(false);
+        window.dispatchEvent(new Event("userLoggedIn"));
         alert("Profile updated successfully!");
       } else {
         alert(data.message || "Failed to update profile");
@@ -212,23 +213,23 @@ export default function Profile({ onPageChange }) {
 
   if (loading) {
     return (
-      <div className="min-h-full bg-gradient-to-b from-blue-50 via-teal-50 to-cyan-50 flex items-center justify-center">
+      <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-teal-600 mb-4"></div>
-          <p className="text-gray-600">Loading profile...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-gray-600 mb-4"></div>
+          <p className="text-gray-300">Loading profile...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-blue-50 via-teal-50 to-cyan-50">
+    <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-700 via-teal-600 to-teal-500 text-white py-12 px-4 shadow-lg">
+        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-12 px-4 shadow-lg">
         <div className="max-w-6xl mx-auto flex justify-between items-start">
           <div>
             <h1 className="text-4xl font-bold mb-2">My Profile</h1>
-            <p className="text-indigo-100">Manage your account and preferences</p>
+            <p className="text-gray-300">Manage your account and preferences</p>
           </div>
           <button
             onClick={handleLogout}
@@ -249,7 +250,7 @@ export default function Profile({ onPageChange }) {
               {/* Profile Header */}
               <div className="flex items-start justify-between mb-8 pb-6 border-b-2 border-gray-200">
                 <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-700 to-teal-500 rounded-full flex items-center justify-center text-white">
+                  <div className="w-20 h-20 bg-gradient-to-br from-gray-700 to-gray-500 rounded-full flex items-center justify-center text-white">
                     <User size={40} />
                   </div>
                   <div>
@@ -260,7 +261,7 @@ export default function Profile({ onPageChange }) {
                 {!isEditing && !showWishlist && (
                   <button
                     onClick={handleEdit}
-                    className="bg-gradient-to-r from-teal-600 to-blue-600 text-white p-3 rounded-lg hover:shadow-lg transition flex items-center gap-2"
+                    className="bg-gradient-to-r from-gray-600 to-gray-700 text-white p-3 rounded-lg hover:shadow-lg transition flex items-center gap-2"
                   >
                     <Edit2 size={20} />
                     <span className="hidden sm:inline">Edit Profile</span>
@@ -285,14 +286,14 @@ export default function Profile({ onPageChange }) {
                     <h3 className="text-xl font-bold text-gray-800 mb-4">Contact Information</h3>
                     <div className="space-y-3">
                       <div className="flex items-center gap-3">
-                        <Mail className="text-teal-600" size={20} />
+                        <Mail className="text-gray-600" size={20} />
                         <div>
                           <p className="text-gray-600 text-sm">Email</p>
                           <p className="text-gray-800 font-semibold">{profileData.email}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <Phone className="text-teal-600" size={20} />
+                        <Phone className="text-gray-600" size={20} />
                         <div>
                           <p className="text-gray-600 text-sm">Phone</p>
                           <p className="text-gray-800 font-semibold">{profileData.phone || "Not provided"}</p>
@@ -303,9 +304,18 @@ export default function Profile({ onPageChange }) {
 
                   {/* Address Info */}
                   <div>
-                    <h3 className="text-xl font-bold text-gray-800 mb-4">Address</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xl font-bold text-gray-800">Address</h3>
+                      <button
+                        onClick={() => onPageChange("AddAddress")}
+                        className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition flex items-center gap-2 text-sm"
+                      >
+                        <Plus size={16} />
+                        {profileData.address ? "Edit Address" : "Add Address"}
+                      </button>
+                    </div>
                     <div className="flex items-start gap-3">
-                      <MapPin className="text-teal-600 mt-1" size={20} />
+                      <MapPin className="text-gray-600 mt-1" size={20} />
                       <div>
                         <p className="text-gray-600 text-sm">Delivery Address</p>
                         {profileData.address ? (
@@ -316,7 +326,7 @@ export default function Profile({ onPageChange }) {
                             </p>
                           </>
                         ) : (
-                          <p className="text-gray-800 font-semibold">Not provided</p>
+                          <p className="text-gray-800 font-semibold">No address added</p>
                         )}
                       </div>
                     </div>
@@ -326,12 +336,12 @@ export default function Profile({ onPageChange }) {
                 /* Wishlist Section */
                 <div className="space-y-6">
                   <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <Heart className="text-teal-600" size={24} />
+                    <Heart className="text-gray-600" size={24} />
                     My Wishlist ({wishlist.length} items)
                   </h3>
                   {wishlistLoading ? (
                     <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-teal-600"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-gray-600"></div>
                     </div>
                   ) : wishlist.length === 0 ? (
                     <div className="text-center py-8">
@@ -339,7 +349,7 @@ export default function Profile({ onPageChange }) {
                       <p className="text-gray-500">Your wishlist is empty</p>
                       <button
                         onClick={() => onPageChange("Products")}
-                        className="mt-4 bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700 transition"
+                        className="mt-4 bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition"
                       >
                         Discover Products
                       </button>
@@ -347,7 +357,7 @@ export default function Profile({ onPageChange }) {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {wishlist.map((product) => (
-                        <div key={product._id} className="border-2 border-gray-200 rounded-lg p-4 hover:border-teal-300 transition">
+                        <div key={product._id} className="border-2 border-gray-200 rounded-lg p-4 hover:border-gray-300 transition">
                           <div className="flex gap-4">
                             {(product.image_url || product.image) && (
                               <img
@@ -359,11 +369,11 @@ export default function Profile({ onPageChange }) {
                             <div className="flex-1">
                               <h4 className="font-bold text-gray-800">{product.name}</h4>
                               <p className="text-sm text-gray-500">{product.category}</p>
-                              <p className="text-xl font-bold text-teal-600 mt-2">₹{product.price}</p>
+                              <p className="text-xl font-bold text-gray-700 mt-2">₹{product.price}</p>
                             </div>
                             <button
                               onClick={() => handleRemoveFromWishlist(product._id)}
-                              className="text-gray-400 hover:text-red-500 transition h-fit"
+                              className="text-gray-400 hover:text-gray-500 transition h-fit"
                               title="Remove from wishlist"
                             >
                               <X size={20} />
@@ -385,7 +395,7 @@ export default function Profile({ onPageChange }) {
                                 localStorage.setItem('selectedProduct', JSON.stringify(productWithId));
                                 onPageChange("ProductDetails");
                               }}
-                              className="flex-1 bg-gradient-to-r from-blue-600 to-teal-600 text-white py-2 rounded-lg hover:shadow-lg transition text-sm font-semibold"
+                               className="flex-1 bg-gradient-to-r from-gray-600 to-gray-700 text-white py-2 rounded-lg hover:shadow-lg transition text-sm font-semibold"
                             >
                               Add to Cart
                             </button>
@@ -406,7 +416,7 @@ export default function Profile({ onPageChange }) {
                         name="name"
                         value={editData.name}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500"
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500"
                       />
                     </div>
                     <div>
@@ -426,7 +436,7 @@ export default function Profile({ onPageChange }) {
                         name="phone"
                         value={editData.phone}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500"
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500"
                       />
                     </div>
                     <div>
@@ -436,7 +446,7 @@ export default function Profile({ onPageChange }) {
                         name="country"
                         value={editData.country}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500"
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500"
                       />
                     </div>
                     <div className="md:col-span-2">
@@ -446,7 +456,7 @@ export default function Profile({ onPageChange }) {
                         name="address"
                         value={editData.address}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500"
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500"
                       />
                     </div>
                     <div>
@@ -456,7 +466,7 @@ export default function Profile({ onPageChange }) {
                         name="city"
                         value={editData.city}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500"
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500"
                       />
                     </div>
                     <div>
@@ -466,7 +476,7 @@ export default function Profile({ onPageChange }) {
                         name="state"
                         value={editData.state}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500"
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500"
                       />
                     </div>
                     <div>
@@ -476,7 +486,7 @@ export default function Profile({ onPageChange }) {
                         name="zipCode"
                         value={editData.zipCode}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-teal-500"
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-gray-500"
                       />
                     </div>
                   </div>
@@ -486,7 +496,7 @@ export default function Profile({ onPageChange }) {
                     <button
                       onClick={handleSave}
                       disabled={saving}
-                      className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-lg font-bold hover:shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 rounded-lg font-bold hover:shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <Save size={20} />
                       {saving ? "Saving..." : "Save Changes"}
@@ -506,12 +516,12 @@ export default function Profile({ onPageChange }) {
             {/* Order History */}
             <div className="bg-white rounded-lg shadow-lg p-8 mt-8">
               <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <ShoppingBag className="text-teal-600" size={28} />
+                <ShoppingBag className="text-gray-600" size={28} />
                 Order History
               </h3>
               {ordersLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-teal-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-gray-600"></div>
                 </div>
               ) : orders.length === 0 ? (
                 <div className="text-center py-8">
@@ -519,7 +529,7 @@ export default function Profile({ onPageChange }) {
                   <p className="text-gray-500">No orders yet</p>
                   <button
                     onClick={() => onPageChange("Products")}
-                    className="mt-4 bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition"
+                        className="mt-4 bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition"
                   >
                     Start Shopping
                   </button>
@@ -527,7 +537,7 @@ export default function Profile({ onPageChange }) {
               ) : (
                 <div className="space-y-4">
                   {orders.map((order) => (
-                    <div key={order._id} className="border-2 border-gray-200 rounded-lg p-4 hover:border-indigo-300 transition">
+                    <div key={order._id} className="border-2 border-gray-200 rounded-lg p-4 hover:border-gray-300 transition">
                       <div className="flex flex-wrap justify-between items-start mb-4">
                         <div>
                           <p className="font-bold text-gray-800">{order.order_id}</p>
@@ -539,10 +549,10 @@ export default function Profile({ onPageChange }) {
                             })}
                           </p>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${order.status === 'Delivered' ? 'bg-green-100 text-green-800' :
-                            order.status === 'Shipped' ? 'bg-blue-100 text-blue-800' :
-                              order.status === 'Processing' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-gray-100 text-gray-800'
+                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${order.status === 'Delivered' ? 'bg-gray-300 text-gray-800' :
+                            order.status === 'Shipped' ? 'bg-gray-200 text-gray-700' :
+                              order.status === 'Processing' ? 'bg-gray-200 text-gray-700' :
+                                'bg-gray-100 text-gray-600'
                           }`}>
                           {order.status}
                         </span>
@@ -576,13 +586,13 @@ export default function Profile({ onPageChange }) {
                         <p className="mt-2 text-sm text-gray-600">Last known location: {order.tracking_location}</p>
                       )}
                       {order.cancellation_reason && (
-                        <p className="mt-2 text-sm text-red-600">Cancellation reason: {order.cancellation_reason}</p>
+                        <p className="mt-2 text-sm text-gray-600">Cancellation reason: {order.cancellation_reason}</p>
                       )}
                       <div className="mt-4 flex flex-wrap gap-3 items-center">
                         {order.status !== "Cancelled" && (
                           <button
                             onClick={() => openTrackingLink(order)}
-                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-teal-500 text-white rounded-lg hover:shadow-lg transition"
+                            className="px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:shadow-lg transition"
                           >
                             Track Package
                           </button>
@@ -602,27 +612,27 @@ export default function Profile({ onPageChange }) {
             <div className="bg-white rounded-lg shadow-lg p-6">
               <h3 className="text-xl font-bold text-gray-800 mb-4">Account Stats</h3>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-100 to-teal-100 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <ShoppingBag className="text-teal-600" size={24} />
+                    <ShoppingBag className="text-gray-600" size={24} />
                     <div>
                       <p className="text-gray-600 text-sm">Total Orders</p>
                       <p className="text-2xl font-bold text-gray-800">{orders.length}</p>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-teal-100 to-cyan-100 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <Heart className="text-teal-600" size={24} />
+                    <Heart className="text-gray-600" size={24} />
                     <div>
                       <p className="text-gray-600 text-sm">Wishlist Items</p>
                       <p className="text-2xl font-bold text-gray-800">{wishlist.length}</p>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-100 to-emerald-100 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <ShoppingBag className="text-green-600" size={24} />
+                    <ShoppingBag className="text-gray-600" size={24} />
                     <div>
                       <p className="text-gray-600 text-sm">Total Spent</p>
                       <p className="text-2xl font-bold text-gray-800">
@@ -645,14 +655,14 @@ export default function Profile({ onPageChange }) {
                 }}
                 className="w-full flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg transition text-gray-700 font-semibold"
               >
-                <Heart size={20} className="text-teal-600" />
+                <Heart size={20} className="text-gray-600" />
                 My Wishlist
               </button>
               <button
                 onClick={() => onPageChange("Products")}
                 className="w-full flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg transition text-gray-700 font-semibold"
               >
-                <ShoppingBag size={20} className="text-teal-600" />
+                <ShoppingBag size={20} className="text-gray-600" />
                 Continue Shopping
               </button>
             </div>

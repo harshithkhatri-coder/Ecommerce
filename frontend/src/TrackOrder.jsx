@@ -24,11 +24,11 @@ const TrackOrder = () => {
             value={trackingId}
             onChange={(e) => setTrackingId(e.target.value)}
             placeholder="VK-123456789 or order id"
-            className="w-full rounded-2xl border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-teal-400 outline-none"
+            className="w-full rounded-2xl border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-gray-400 outline-none"
           />
           <button
             onClick={openTrackingSearch}
-            className="rounded-2xl bg-gradient-to-r from-blue-700 to-teal-600 text-white px-5 py-3 font-semibold hover:shadow-lg transition"
+            className="rounded-2xl bg-gradient-to-r from-gray-700 to-gray-800 text-white px-5 py-3 font-semibold hover:shadow-lg transition"
           >
             Track Package
           </button>
@@ -49,42 +49,42 @@ const TrackOrder = () => {
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Order Statuses</h3>
         <div className="space-y-3 mt-2">
           <div className="flex items-center">
-            <span className="w-4 h-4 rounded-full bg-blue-500 mr-3"></span>
+            <span className="w-4 h-4 rounded-full bg-gray-500 mr-3"></span>
             <div>
               <p className="font-medium">Order Placed</p>
               <p className="text-sm text-gray-500">Your order has been confirmed and is awaiting processing</p>
             </div>
           </div>
           <div className="flex items-center">
-            <span className="w-4 h-4 rounded-full bg-yellow-500 mr-3"></span>
+            <span className="w-4 h-4 rounded-full bg-gray-400 mr-3"></span>
             <div>
               <p className="font-medium">Processing</p>
               <p className="text-sm text-gray-500">Your order is being prepared for shipment</p>
             </div>
           </div>
           <div className="flex items-center">
-            <span className="w-4 h-4 rounded-full bg-indigo-500 mr-3"></span>
+            <span className="w-4 h-4 rounded-full bg-gray-500 mr-3"></span>
             <div>
               <p className="font-medium">Shipped</p>
               <p className="text-sm text-gray-500">Your package has been handed over to the courier</p>
             </div>
           </div>
           <div className="flex items-center">
-            <span className="w-4 h-4 rounded-full bg-purple-500 mr-3"></span>
+            <span className="w-4 h-4 rounded-full bg-gray-500 mr-3"></span>
             <div>
               <p className="font-medium">In Transit</p>
               <p className="text-sm text-gray-500">Your package is on its way to your location</p>
             </div>
           </div>
           <div className="flex items-center">
-            <span className="w-4 h-4 rounded-full bg-orange-500 mr-3"></span>
+            <span className="w-4 h-4 rounded-full bg-gray-500 mr-3"></span>
             <div>
               <p className="font-medium">Out for Delivery</p>
               <p className="text-sm text-gray-500">The package is with the delivery executive</p>
             </div>
           </div>
           <div className="flex items-center">
-            <span className="w-4 h-4 rounded-full bg-green-500 mr-3"></span>
+            <span className="w-4 h-4 rounded-full bg-gray-600 mr-3"></span>
             <div>
               <p className="font-medium">Delivered</p>
               <p className="text-sm text-gray-500">Your package has been delivered successfully</p>

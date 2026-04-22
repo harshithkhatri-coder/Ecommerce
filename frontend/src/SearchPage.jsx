@@ -30,9 +30,9 @@ export default function Search({ searchQuery, onPageChange, onAddToCart }) {
   };
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-slate-50 via-blue-50 to-teal-50">
+    <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-700 via-teal-600 to-teal-500 text-white py-6 px-4 shadow-lg sticky top-0 z-40">
+        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-6 px-4 shadow-lg sticky top-0 z-40">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4 mb-4">
             <button
@@ -53,7 +53,7 @@ export default function Search({ searchQuery, onPageChange, onAddToCart }) {
               value={query}
               onChange={handleSearch}
               placeholder="Search by product name or category..."
-              className="w-full pl-12 pr-12 py-3 text-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-white/50"
+              className="w-full pl-12 pr-12 py-3 text-gray-200 bg-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-white/50 placeholder-gray-400"
               autoFocus
             />
             {query && (
@@ -73,19 +73,19 @@ export default function Search({ searchQuery, onPageChange, onAddToCart }) {
         {query.trim() === "" ? (
           <div className="text-center py-16">
             <SearchIcon size={64} className="mx-auto text-gray-400 mb-4" />
-            <h2 className="text-3xl font-bold text-gray-700 mb-2">Search Products</h2>
-            <p className="text-gray-600">Enter a product name or category to begin searching</p>
+            <h2 className="text-3xl font-bold text-white mb-2">Search Products</h2>
+            <p className="text-gray-300">Enter a product name or category to begin searching</p>
           </div>
         ) : results.length === 0 ? (
           <div className="text-center py-16">
             <SearchIcon size={64} className="mx-auto text-gray-400 mb-4" />
-            <h2 className="text-3xl font-bold text-gray-700 mb-2">No Results Found</h2>
-            <p className="text-gray-600">
+            <h2 className="text-3xl font-bold text-white mb-2">No Results Found</h2>
+            <p className="text-gray-300">
               We couldn't find any products matching "<strong>{query}</strong>"
             </p>
             <button
               onClick={clearSearch}
-              className="mt-6 bg-gradient-to-r from-blue-700 to-teal-600 text-white px-6 py-2 rounded-lg hover:shadow-lg transition"
+              className="mt-6 bg-gradient-to-r from-gray-700 to-gray-800 text-white px-6 py-2 rounded-lg hover:shadow-lg transition"
             >
               Clear Search
             </button>
@@ -113,24 +113,24 @@ export default function Search({ searchQuery, onPageChange, onAddToCart }) {
                       alt={product.name}
                       className="w-full h-48 object-cover hover:scale-110 transition"
                     />
-                    <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold">
+                     <div className="absolute top-2 right-2 bg-gray-600 text-white px-2 py-1 rounded text-xs font-semibold">
                       {product.category}
                     </div>
                   </div>
 
                   <h2
                     onClick={() => onPageChange("ProductDetails", product.id)}
-                    className="text-lg font-semibold text-gray-800 mb-2 cursor-pointer hover:text-blue-600 transition line-clamp-2"
+                     className="text-lg font-semibold text-gray-800 mb-2 cursor-pointer hover:text-gray-700 transition line-clamp-2"
                   >
                     {product.name}
                   </h2>
 
-                  <p className="text-2xl font-bold text-blue-600 mb-3">₹{product.price}</p>
+                   <p className="text-2xl font-bold text-gray-800 mb-3">₹{product.price}</p>
 
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => onPageChange("ProductDetails", product.id)}
-                      className="bg-gradient-to-r from-blue-700 to-teal-600 text-white py-2 rounded-xl hover:shadow-lg transition font-semibold text-sm"
+                       className="bg-gradient-to-r from-gray-700 to-gray-800 text-white py-2 rounded-xl hover:shadow-lg transition font-semibold text-sm"
                     >
                       View
                     </button>

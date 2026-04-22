@@ -104,34 +104,34 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
   };
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-slate-50 via-blue-50 to-teal-50">
+    <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
       {/* Page Header */}
-      <div className="bg-gradient-to-r from-blue-700 via-teal-600 to-teal-500 text-white py-12 px-4 shadow-lg">
+        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-12 px-4 shadow-lg">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-4xl font-bold mb-2">Shopping Cart</h1>
-          <p className="text-teal-100">Review and manage your items</p>
+           <p className="text-gray-200">Review and manage your items</p>
         </div>
       </div>
 
       {/* Cart Content */}
       <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
         {/* Item Count Indicator */}
-        <div className="mb-4 bg-teal-50 border border-teal-200 rounded-lg p-3 text-center">
-          <p className="text-teal-700 font-semibold">
-            Items in Cart: <span className="text-teal-900">{totalItems}</span> / {MAX_ITEMS}
+        <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+          <p className="text-gray-700 font-semibold">
+            Items in Cart: <span className="text-gray-900">{totalItems}</span> / {MAX_ITEMS}
           </p>
           {totalItems >= MAX_ITEMS && (
-            <p className="text-red-600 text-sm mt-1">You have reached the maximum limit of {MAX_ITEMS} items</p>
+            <p className="text-gray-400 text-sm mt-1">You have reached the maximum limit of {MAX_ITEMS} items</p>
           )}
         </div>
         {cart.length === 0 ? (
           <div className="text-center py-16">
             <ShoppingCart size={64} className="mx-auto text-gray-400 mb-4" />
-            <h2 className="text-3xl font-bold text-gray-700 mb-4">Your Cart is Empty</h2>
-            <p className="text-gray-600 mb-8">Add some products to get started!</p>
+            <h2 className="text-3xl font-bold text-white mb-4">Your Cart is Empty</h2>
+            <p className="text-gray-300 mb-8">Add some products to get started!</p>
             <button
               onClick={() => onPageChange("Products")}
-              className="bg-gradient-to-r from-blue-700 to-teal-600 text-white px-8 py-3 rounded-lg font-semibold hover:shadow-lg transition"
+               className="bg-gradient-to-r from-gray-700 to-gray-800 text-white px-8 py-3 rounded-lg font-semibold hover:shadow-lg transition"
             >
               Continue Shopping
             </button>
@@ -152,7 +152,7 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                       <div className="flex-grow w-full">
                         <h3 className="text-lg sm:text-xl font-bold text-gray-800">{item.name}</h3>
                         <p className="text-gray-600 mb-2">{item.category}</p>
-                        <p className="text-xl sm:text-2xl font-bold text-teal-600">₹{item.price}</p>
+                         <p className="text-xl sm:text-2xl font-bold text-gray-800">₹{item.price}</p>
 
                         {/* Quantity Controls */}
                         <div className="flex items-center gap-3 mt-3">
@@ -175,7 +175,7 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                         <p className="text-lg sm:text-xl font-bold text-gray-800">₹{item.price * item.quantity}</p>
                         <button
                           onClick={() => onRemoveFromCart(index)}
-                          className="bg-red-500 text-white p-2 sm:p-3 rounded-lg hover:bg-red-600 transition w-full sm:w-auto"
+                          className="bg-gray-600 text-white p-2 sm:p-3 rounded-lg hover:bg-gray-700 transition w-full sm:w-auto"
                         >
                           <Trash2 size={18} className="mx-auto" />
                         </button>
@@ -198,7 +198,7 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                   </div>
                   <div className="flex justify-between text-gray-700">
                     <span>Shipping</span>
-                    <span className="font-semibold text-green-600">Free</span>
+                    <span className="font-semibold text-gray-600">Free</span>
                   </div>
                   <div className="flex justify-between text-gray-700">
                     <span>Tax</span>
@@ -209,13 +209,13 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                 <div className="border-t-2 border-gray-200 pt-4 mb-6">
                   <div className="flex justify-between text-2xl font-bold text-gray-800">
                     <span>Total</span>
-                    <span className="bg-gradient-to-r from-blue-700 to-teal-600 bg-clip-text text-transparent">
+                    <span className="bg-gradient-to-r from-gray-700 to-gray-800 bg-clip-text text-transparent">
                       ₹{total + Math.round(total * 0.18)}
                     </span>
                   </div>
                 </div>
 
-                <div className="mb-6 rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-700">
+                <div className="mb-6 rounded-xl bg-gray-50 border border-gray-200 p-4 text-sm text-gray-700">
                   Payment method: <strong>Prepaid only</strong>. Cash on delivery is not available.
                 </div>
 
@@ -228,26 +228,26 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                     {userAddress ? (
                       <p className="text-sm">{userAddress}</p>
                     ) : (
-                      <p className="text-sm text-red-500">No address found. Please add your address in your profile.</p>
+                      <p className="text-sm text-gray-500">No address found. Please add your address in your profile.</p>
                     )}
                   </div>
                   <button
                     onClick={() => onPageChange("Profile")}
-                    className="text-sm text-teal-600 hover:text-indigo-800 mt-1 underline"
+                     className="text-sm text-gray-600 hover:text-gray-800 mt-1 underline"
                   >
                     Edit address in profile
                   </button>
                 </div>
 
                 {orderSuccess ? (
-                  <div className="w-full bg-green-500 text-white py-3 rounded-lg font-bold text-center mb-3">
+                  <div className="w-full bg-gray-500 text-white py-3 rounded-lg font-bold text-center mb-3">
                     ✓ Order Placed Successfully!
                   </div>
                 ) : (
                   <button
                     onClick={handleCheckout}
                     disabled={loading || cart.length === 0 || !userAddress.trim()}
-                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-lg font-bold hover:shadow-lg transition mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 rounded-lg font-bold hover:shadow-lg transition mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? "Placing Order..." : "Proceed to Checkout"}
                   </button>
@@ -255,7 +255,7 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
 
                 <button
                   onClick={() => onPageChange("Products")}
-                  className="w-full border-2 border-teal-600 text-teal-600 py-3 rounded-lg font-bold hover:bg-teal-50 transition flex items-center justify-center gap-2"
+                  className="w-full border-2 border-gray-600 text-gray-600 py-3 rounded-lg font-bold hover:bg-gray-50 transition flex items-center justify-center gap-2"
                 >
                   <ArrowLeft size={20} />
                   Continue Shopping

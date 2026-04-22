@@ -12,6 +12,9 @@
     "test": "cd frontend && npm test"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "mongodb": "^7.2.0"
   }
 }

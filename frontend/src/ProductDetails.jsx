@@ -82,20 +82,20 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
 
   if (loading) {
     return (
-      <div className="min-h-full bg-gradient-to-b from-slate-50 via-blue-50 to-teal-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-teal-600"></div>
+      <div className="min-h-full bg-gradient-to-b from-gray-50 via-gray-100 to-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-gray-400"></div>
       </div>
     );
   }
 
   if (!product) {
     return (
-      <div className="min-h-full bg-gradient-to-b from-slate-50 via-blue-50 to-teal-50 flex items-center justify-center">
+      <div className="min-h-full bg-gradient-to-b from-gray-50 via-gray-100 to-white flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">Product not found</h1>
           <button
             onClick={() => onPageChange("Products")}
-            className="bg-teal-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-indigo-700 transition"
+             className="bg-gray-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-700 transition"
           >
             Back to Products
           </button>
@@ -110,8 +110,14 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
   // const totalPrice = product.price * quantity;
   const MAX_ITEMS = 5;
 
-  const handleAddToCart = () => {
-    // Check if adding these items would exceed the limit
+const handleAddToCart = () => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    if (!user) {
+      alert("Please login to add items to cart");
+      onPageChange("Login");
+      return;
+    }
+
     const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
     const currentTotalItems = currentCart.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
@@ -126,7 +132,14 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
     alert(`Added ${quantity} item(s) to cart!`);
   };
 
-  const handleBuyNow = () => {
+const handleBuyNow = () => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    if (!user) {
+      alert("Please login to place an order");
+      onPageChange("Login");
+      return;
+    }
+
     const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
     const currentTotalItems = currentCart.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
@@ -218,9 +231,9 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
   };
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-slate-50 via-blue-50 to-teal-50">
+    <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-700 via-teal-600 to-teal-500 text-white py-6 px-4 shadow-lg sticky top-0 z-40">
+        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-6 px-4 shadow-lg sticky top-0 z-40">
         <div className="max-w-6xl mx-auto flex items-center gap-4">
           <button
             onClick={() => onPageChange("Products")}
@@ -252,10 +265,10 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
               />
               <button
                 onClick={handleToggleWishlist}
-                className={`absolute top-4 right-4 p-3 rounded-full transition ${isInWishlist
-                  ? "bg-teal-500 text-white"
-                  : "bg-white/80 text-gray-800 hover:bg-white"
-                  }`}
+                 className={`absolute top-4 right-4 p-3 rounded-full transition ${isInWishlist
+                   ? "bg-gray-500 text-white"
+                   : "bg-white/80 text-gray-800 hover:bg-white"
+                   }`}
               >
                 <Heart size={24} fill={isInWishlist ? "currentColor" : "none"} />
               </button>
@@ -275,7 +288,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
             <div className="flex items-center gap-2 mb-4">
               <div className="flex gap-1">
                 {[...Array(5)].map((_, i) => (
-                  <span key={i} className={`text-xl ${i < averageRating ? 'text-yellow-400' : 'text-gray-300'}`}>
+                  <span key={i} className={`text-xl ${i < averageRating ? 'text-gray-400' : 'text-gray-300'}`}>
                     ★
                   </span>
                 ))}
@@ -290,9 +303,9 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
             {/* Price */}
             <div className="border-t-2 border-b-2 border-gray-200 py-4 mb-6">
               <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-2xl md:text-4xl font-bold text-teal-600">₹{product.price}</span>
+                 <span className="text-2xl md:text-4xl font-bold text-gray-800">₹{product.price}</span>
                 <span className="text-lg text-gray-500 line-through">₹{Math.round(product.price * 1.2)}</span>
-                <span className="bg-green-100 text-green-700 px-3 py-1 rounded text-sm font-semibold">
+                 <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm font-semibold">
                   20% OFF
                 </span>
               </div>
@@ -324,8 +337,8 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
                       key={size}
                       onClick={() => setSelectedSize(size)}
                       className={`py-2 px-3 rounded-lg font-semibold transition border-2 ${selectedSize === size
-                        ? "bg-teal-600 text-white border-teal-600"
-                        : "bg-gray-100 text-gray-800 border-gray-300 hover:border-teal-600"
+                        ? "bg-gray-600 text-white border-gray-600"
+                        : "bg-gray-100 text-gray-800 border-gray-300 hover:border-gray-500"
                         }`}
                     >
                       {size}
@@ -361,14 +374,14 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
               <div className="space-y-3 mb-6">
                 <button
                   onClick={handleBuyNow}
-                  className="w-full bg-black from-green-500 to-emerald-600 text-white py-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+                  className="w-full bg-gray-700 text-white py-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
                 >
                   <CreditCard size={24} />
                   Buy Now
                 </button>
                 <button
                   onClick={handleAddToCart}
-                  className="w-full bg-black from-blue-500 to-teal-600 text-white py-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-gray-600 to-gray-700 text-white py-4 rounded-lg font-bold text-lg hover:shadow-lg transition flex items-center justify-center gap-2"
                 >
                   <ShoppingCart size={24} />
                   Add to Cart
@@ -389,14 +402,14 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
               reviews.map((review, index) => (
                 <div key={review.id || index} className="bg-white rounded-lg shadow-md p-6">
                   <div className="flex items-center gap-4 mb-4">
-                    <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                      <span className="text-teal-600 font-bold">{review.user.charAt(0)}</span>
+                    <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                       <span className="text-gray-600 font-bold">{review.user.charAt(0)}</span>
                     </div>
                     <div>
                       <h4 className="font-bold text-gray-800">{review.user}</h4>
                       <div className="flex gap-1">
                         {[...Array(5)].map((_, i) => (
-                          <span key={i} className={`text-xl ${i < review.rating ? 'text-yellow-400' : 'text-gray-300'}`}>
+                          <span key={i} className={`text-xl ${i < review.rating ? 'text-gray-400' : 'text-gray-300'}`}>
                             ★
                           </span>
                         ))}
@@ -433,7 +446,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
                   type="text"
                   value={newReview.user}
                   onChange={(e) => setNewReview({ ...newReview, user: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   required
                 />
               </div>
@@ -445,7 +458,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
                       key={star}
                       type="button"
                       onClick={() => setNewReview({ ...newReview, rating: star })}
-                      className={`text-2xl ${star <= newReview.rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                      className={`text-2xl ${star <= newReview.rating ? 'text-gray-400' : 'text-gray-300'}`}
                     >
                       ★
                     </button>
@@ -457,14 +470,14 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
                 <textarea
                   value={newReview.comment}
                   onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 h-32 resize-none"
+                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 h-32 resize-none"
                   placeholder="Share your thoughts about this product..."
                   required
                 />
               </div>
               <button
                 type="submit"
-                className="bg-teal-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-indigo-700 transition"
+                className="bg-gray-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-700 transition"
               >
                 Submit Review
               </button>
@@ -477,7 +490,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
             {!showContactForm ? (
               <button
                 onClick={() => setShowContactForm(true)}
-                className="bg-green-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-700 transition"
+                className="bg-gray-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-700 transition"
               >
                 Contact Seller
               </button>
@@ -488,7 +501,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
                   <textarea
                     value={contactMessage}
                     onChange={(e) => setContactMessage(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 h-32 resize-none"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 h-32 resize-none"
                     placeholder="Type your message to the seller..."
                     required
                   />
@@ -496,14 +509,14 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
                 <div className="flex gap-4">
                   <button
                     type="submit"
-                    className="bg-green-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-700 transition"
+                className="bg-gray-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-700 transition"
                   >
                     Send Message
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowContactForm(false)}
-                    className="bg-gray-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-700 transition"
+                    className="bg-gray-700 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-800 transition"
                   >
                     Cancel
                   </button>
