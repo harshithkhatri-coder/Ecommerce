@@ -1,14 +1,19 @@
 import React, { useState } from "react";
 import { ShoppingCart, User, Search, Menu, X } from "lucide-react";
 
+const ADMIN_LOGIN_EMAIL = "admin@veluxkicks.com";
+
+function isAdminUser(user) {
+  if (!user) return false;
+  const email = (user.email || "").trim().toLowerCase();
+  return user.role === "admin" || email === ADMIN_LOGIN_EMAIL;
+}
+
 export default function Header({ currentPage, onPageChange, cartCount, user, onLogout }) {
-  const isAdmin = user?.role === "admin";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navItems = ["Home", "Products", "About"];
-  if (isAdmin) {
-    navItems.push("Admin");
-  }
+  const baseNavItems = ["Home", "Products", "About"];
+  const navItems = isAdminUser(user) ? [...baseNavItems, "Admin"] : baseNavItems;
 
   return (
     <header className="bg-gray-950 text-white shadow-lg sticky top-0 z-50">

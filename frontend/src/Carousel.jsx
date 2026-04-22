@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import API_BASE_URL from "./config";
 import SHOE1 from "./images/SHOE1.jpg";
 import WhatsApp1 from "./images/WhatsApp Image 2026-01-13 at 7.57.38 PM.jpeg";
 import WhatsApp2 from "./images/WhatsApp Image 2026-01-13 at 7.57.39 PM (1).jpeg";
@@ -19,21 +20,44 @@ export default function Carousel() {
   const [carouselImages, setCarouselImages] = useState(defaultImages);
 
   useEffect(() => {
-    const saved = localStorage.getItem("carouselImages");
-    if (saved) {
+    const fetchCarousel = async () => {
       try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCarouselImages(parsed);
-        } else {
-          setCarouselImages(defaultImages);
+        const response = await fetch(`${API_BASE_URL}/carousel`);
+        const data = await response.json();
+        if (response.ok && data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setCarouselImages(data.data);
+          localStorage.setItem("carouselImages", JSON.stringify(data.data));
+          return;
         }
       } catch (e) {
-        console.error("Error loading carousel:", e);
-        setCarouselImages(defaultImages);
+        console.error("Error fetching carousel:", e);
       }
-    }
+
+      const saved = localStorage.getItem("carouselImages");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCarouselImages(parsed);
+            return;
+          }
+        } catch (e) {
+          console.error("Error loading local carousel:", e);
+        }
+      }
+
+      setCarouselImages(defaultImages);
+    };
+
+    fetchCarousel();
   }, []);
+
+  useEffect(() => {
+    if (carouselImages.length === 0) {
+        setCarouselImages(defaultImages);
+        return;
+      }
+  }, [carouselImages]);
 
   useEffect(() => {
     const interval = setInterval(() => {

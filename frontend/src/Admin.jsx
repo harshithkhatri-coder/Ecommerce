@@ -5,6 +5,7 @@ import {
   Bell, CheckCircle
 } from "lucide-react";
 import API_BASE_URL from "./config";
+import { resolveImageUrl } from "./imageHelpers";
 
 const DEFAULT_CAROUSEL_IMAGES = [
   { id: 1, url: "/images/SHOE1.jpg", title: "BRANDED SHOES" },
@@ -13,6 +14,8 @@ const DEFAULT_CAROUSEL_IMAGES = [
   { id: 4, url: "/images/WhatsApp Image 2026-01-13 at 7.57.39 PM.jpeg", title: "Premium Sneakers" },
   { id: 5, url: "/images/WhatsApp Image 2026-01-13 at 7.57.40 PM.jpeg", title: "Latest Trends" }
 ];
+const DEFAULT_PRODUCT_CATEGORIES = ["Running Sneakers", "Casual Sneakers", "Watches", "Belts"];
+const ADMIN_LOGIN_EMAIL = "admin@veluxkicks.com";
 
 function loadCarouselImages() {
   try {
@@ -29,6 +32,12 @@ function loadCarouselImages() {
   } catch (error) {
     return DEFAULT_CAROUSEL_IMAGES;
   }
+}
+
+function isAdminUser(user) {
+  if (!user) return false;
+  const email = (user.email || "").trim().toLowerCase();
+  return user.role === "admin" || email === ADMIN_LOGIN_EMAIL;
 }
 
 export default function Admin({ onPageChange, onLogout }) {
@@ -68,9 +77,21 @@ export default function Admin({ onPageChange, onLogout }) {
   });
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const getEntityId = (entity) => entity?.id || entity?._id || "";
+  const productCategories = [...new Set([
+    ...DEFAULT_PRODUCT_CATEGORIES,
+    ...products.map((product) => (product.category || "").trim()).filter(Boolean)
+  ])].sort((a, b) => a.localeCompare(b));
+
+  const closeProductModal = () => {
+    setShowProductModal(false);
+    setEditingProduct(null);
+    setSelectedImage(null);
+    setImagePreview(null);
+  };
 
   const openCarouselEditor = () => {
-    setCarouselForm(loadCarouselImages());
+    setCarouselForm(carouselItems.length ? carouselItems : DEFAULT_CAROUSEL_IMAGES);
     setEditingCarousel(true);
   };
 
@@ -90,7 +111,8 @@ export default function Admin({ onPageChange, onLogout }) {
     reader.readAsDataURL(file);
   };
 
-  const saveCarouselChanges = () => {
+  const saveCarouselChanges = async () => {
+    const token = localStorage.getItem("adminToken");
     const normalized = [...Array(5)].map((_, index) => {
       const slide = carouselForm[index] || {};
       return {
@@ -106,16 +128,54 @@ export default function Admin({ onPageChange, onLogout }) {
       return;
     }
 
-    localStorage.setItem("carouselImages", JSON.stringify(normalized));
-    setCarouselItems(normalized);
-    setEditingCarousel(false);
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/carousel`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ slides: normalized })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to save carousel");
+      }
+
+      setCarouselItems(data.data || normalized);
+      localStorage.setItem("carouselImages", JSON.stringify(data.data || normalized));
+      setEditingCarousel(false);
+      alert("Carousel updated successfully!");
+    } catch (error) {
+      console.error("Error saving carousel:", error);
+      alert(error.message || "Failed to save carousel");
+    }
   };
 
-  const resetCarouselToDefault = () => {
-    localStorage.removeItem("carouselImages");
-    setCarouselItems(DEFAULT_CAROUSEL_IMAGES);
-    setCarouselForm(DEFAULT_CAROUSEL_IMAGES);
-    setEditingCarousel(false);
+  const resetCarouselToDefault = async () => {
+    const token = localStorage.getItem("adminToken");
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/carousel`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ slides: DEFAULT_CAROUSEL_IMAGES })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to reset carousel");
+      }
+      setCarouselItems(data.data || DEFAULT_CAROUSEL_IMAGES);
+      setCarouselForm(data.data || DEFAULT_CAROUSEL_IMAGES);
+      localStorage.setItem("carouselImages", JSON.stringify(data.data || DEFAULT_CAROUSEL_IMAGES));
+      setEditingCarousel(false);
+    } catch (error) {
+      console.error("Error resetting carousel:", error);
+      alert(error.message || "Failed to reset carousel");
+    }
   };
 
   useEffect(() => {
@@ -130,7 +190,7 @@ export default function Admin({ onPageChange, onLogout }) {
       if (adminToken && adminUserData) {
         try {
           const user = JSON.parse(adminUserData);
-          if (user.role === "admin") {
+          if (isAdminUser(user)) {
             setAdminUser(user);
             setIsAuthenticated(true);
             setCheckingAuth(false);
@@ -144,7 +204,7 @@ export default function Admin({ onPageChange, onLogout }) {
       } else if (userToken && userData) {
         try {
           const user = JSON.parse(userData);
-          if (user.role === "admin") {
+          if (isAdminUser(user)) {
             localStorage.setItem("adminToken", userToken);
             localStorage.setItem("adminUser", userData);
             setAdminUser(user);
@@ -179,14 +239,33 @@ export default function Admin({ onPageChange, onLogout }) {
 
   const fetchData = async (token) => {
     try {
-      const productsRes = await fetch(`${API_BASE_URL}/products`, {
+      const productsRes = await fetch(`${API_BASE_URL}/admin/products`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const productsData = await productsRes.json();
-      if (productsData.success) {
+      if (productsRes.ok && productsData.success) {
         setProducts(productsData.data || []);
       } else {
-        setProducts([]);
+        const publicProductsRes = await fetch(`${API_BASE_URL}/products`);
+        const publicProductsData = await publicProductsRes.json();
+        if (publicProductsRes.ok && publicProductsData.success) {
+          setProducts(publicProductsData.data || []);
+        } else {
+          setProducts([]);
+        }
+      }
+
+      try {
+        const carouselRes = await fetch(`${API_BASE_URL}/admin/carousel`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const carouselData = await carouselRes.json();
+        if (carouselRes.ok && carouselData.success && Array.isArray(carouselData.data)) {
+          setCarouselItems(carouselData.data);
+          localStorage.setItem("carouselImages", JSON.stringify(carouselData.data));
+        }
+      } catch (e) {
+        console.error("Error fetching carousel:", e);
       }
 
       try {
@@ -200,7 +279,9 @@ export default function Admin({ onPageChange, onLogout }) {
           setOrders([]);
         }
 
-        const totalRevenue = (ordersData.data || []).reduce((sum, order) => sum + (order.total || 0), 0);
+        const totalRevenue = (ordersData.data || [])
+          .filter((order) => order.status !== "Cancelled")
+          .reduce((sum, order) => sum + (order.total || 0), 0);
         setStats(prev => ({
           ...prev,
           totalOrders: (ordersData.data || []).length,
@@ -247,13 +328,25 @@ export default function Admin({ onPageChange, onLogout }) {
         if (usersData.success) {
           const nonAdminUsers = (usersData.data || []).filter((user) => user.role !== "admin");
           setUsers(nonAdminUsers);
+          setStats(prev => ({
+            ...prev,
+            totalUsers: nonAdminUsers.length
+          }));
         } else {
           console.log("Users fetch failed:", usersData.message);
           setUsers([]);
+          setStats(prev => ({
+            ...prev,
+            totalUsers: 0
+          }));
         }
       } catch (e) {
         console.error("Error fetching users:", e.message);
         setUsers([]);
+        setStats(prev => ({
+          ...prev,
+          totalUsers: 0
+        }));
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -266,27 +359,59 @@ export default function Admin({ onPageChange, onLogout }) {
     setLoginLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(loginForm),
-      });
+      const loginEndpoints = ["/auth/admin-login", "/auth/login"];
+      let lastErrorMessage = "Invalid credentials";
 
-      const data = await response.json();
+      for (const endpoint of loginEndpoints) {
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(loginForm),
+        });
 
-      if (data.success) {
-        if (data.data.role === "admin") {
-          localStorage.setItem("adminToken", data.data.token);
-          localStorage.setItem("adminUser", JSON.stringify(data.data));
-          setAdminUser(data.data);
-          setIsAuthenticated(true);
-          fetchData(data.data.token);
-        } else {
-          setLoginError("Access denied. Admin only.");
+        let data = null;
+        try {
+          data = await response.json();
+        } catch {
+          data = { success: false, message: "Invalid server response" };
         }
-      } else {
-        setLoginError(data.message || "Invalid credentials");
+
+        if (data?.success && data?.data) {
+          if (!isAdminUser(data.data)) {
+            setLoginError("Access denied. Admin only.");
+            setLoginLoading(false);
+            return;
+          }
+
+          const normalizedAdminUser = {
+            ...data.data,
+            role: "admin",
+            email: (data.data.email || "").trim().toLowerCase(),
+          };
+
+          localStorage.setItem("adminToken", normalizedAdminUser.token);
+          localStorage.setItem("adminUser", JSON.stringify(normalizedAdminUser));
+          localStorage.setItem("token", normalizedAdminUser.token);
+          localStorage.setItem("user", JSON.stringify(normalizedAdminUser));
+          window.dispatchEvent(new Event("adminLoggedIn"));
+          setAdminUser(normalizedAdminUser);
+          setIsAuthenticated(true);
+          fetchData(normalizedAdminUser.token);
+          setLoginLoading(false);
+          return;
+        }
+
+        if (data?.message) {
+          lastErrorMessage = data.message;
+        }
+
+        // Try fallback endpoint if not found on this API.
+        if (response.status === 404) {
+          continue;
+        }
       }
+
+      setLoginError(lastErrorMessage);
     } catch (err) {
       console.error("Login error:", err);
       setLoginError("Cannot connect to server. Is backend running?");
@@ -323,6 +448,7 @@ export default function Admin({ onPageChange, onLogout }) {
   };
 
   const handleAddProduct = () => {
+    setActiveTab("products");
     setEditingProduct(null);
     setProductForm({
       name: "",
@@ -338,6 +464,7 @@ export default function Admin({ onPageChange, onLogout }) {
   };
 
   const handleEditProduct = (product) => {
+    setActiveTab("products");
     setEditingProduct(product);
     setProductForm({
       name: product.name || "",
@@ -348,7 +475,7 @@ export default function Admin({ onPageChange, onLogout }) {
       image_url: product.image_url || product.image || "",
     });
     setSelectedImage(null);
-    setImagePreview(product.image_url || product.image || null);
+    setImagePreview(product.image_url || product.image || "");
     setShowProductModal(true);
   };
 
@@ -365,13 +492,36 @@ export default function Admin({ onPageChange, onLogout }) {
     }
   };
 
+  const handleImageUrlChange = (value) => {
+    setSelectedImage(null);
+    setProductForm((prev) => ({ ...prev, image_url: value }));
+    setImagePreview(value);
+  };
+
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("adminToken");
+    const normalizedProductForm = {
+      ...productForm,
+      name: productForm.name.trim(),
+      category: productForm.category.trim(),
+      description: productForm.description.trim(),
+      image_url: productForm.image_url.trim()
+    };
+
+    if (!normalizedProductForm.category) {
+      alert("Please select or enter a category");
+      return;
+    }
 
     try {
+      const editingProductId = getEntityId(editingProduct);
+      if (editingProduct && !editingProductId) {
+        alert("Cannot edit this product because its ID is missing.");
+        return;
+      }
       const url = editingProduct
-        ? `${API_BASE_URL}/admin/products/${editingProduct._id}`
+        ? `${API_BASE_URL}/admin/products/${editingProductId}`
         : `${API_BASE_URL}/admin/products`;
 
       const method = editingProduct ? "PUT" : "POST";
@@ -381,11 +531,11 @@ export default function Admin({ onPageChange, onLogout }) {
       // If there's a selected image file, use FormData
       if (selectedImage) {
         const formData = new FormData();
-        formData.append("name", productForm.name);
-        formData.append("price", productForm.price);
-        formData.append("category", productForm.category);
-        formData.append("stock", productForm.stock);
-        formData.append("description", productForm.description);
+        formData.append("name", normalizedProductForm.name);
+        formData.append("price", normalizedProductForm.price);
+        formData.append("category", normalizedProductForm.category);
+        formData.append("stock", normalizedProductForm.stock);
+        formData.append("description", normalizedProductForm.description);
         formData.append("image", selectedImage);
 
         response = await fetch(url, {
@@ -403,7 +553,7 @@ export default function Admin({ onPageChange, onLogout }) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify(productForm),
+          body: JSON.stringify(normalizedProductForm),
         });
       }
 
@@ -411,7 +561,7 @@ export default function Admin({ onPageChange, onLogout }) {
 
       if (data.success) {
         alert(editingProduct ? "Product updated!" : "Product added!");
-        setShowProductModal(false);
+        closeProductModal();
         fetchData(token);
       } else {
         alert(data.message || "Error saving product");
@@ -422,6 +572,10 @@ export default function Admin({ onPageChange, onLogout }) {
   };
 
   const handleDeleteProduct = async (productId) => {
+    if (!productId) {
+      alert("Cannot delete this product because its ID is missing.");
+      return;
+    }
     if (!window.confirm("Are you sure you want to delete this product?")) return;
 
     const token = localStorage.getItem("adminToken");
@@ -583,25 +737,25 @@ export default function Admin({ onPageChange, onLogout }) {
   return (
     <div className="min-h-full bg-gray-900">
       {/* Header */}
-        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-4 px-6 shadow-lg">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-4">
+        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-4 px-4 md:px-6 shadow-lg">
+        <div className="max-w-7xl mx-auto flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
             <h1 className="text-2xl font-bold">Admin Panel</h1>
-            <span className="bg-white/20 px-3 py-1 rounded-full text-sm">
+            <span className="bg-white/20 px-3 py-1 rounded-full text-sm w-fit">
               Welcome, {adminUser?.name}
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={() => onPageChange("Home")}
-              className="flex items-center gap-2 hover:bg-white/20 px-3 py-2 rounded-lg transition"
+              className="flex items-center gap-2 hover:bg-white/20 px-3 py-2 rounded-lg transition text-sm sm:text-base"
             >
               <Home size={20} />
               <span>View Site</span>
             </button>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 hover:bg-white/20 px-3 py-2 rounded-lg transition"
+              className="flex items-center gap-2 hover:bg-white/20 px-3 py-2 rounded-lg transition text-sm sm:text-base"
             >
               <LogOut size={20} />
               <span>Logout</span>
@@ -610,9 +764,9 @@ export default function Admin({ onPageChange, onLogout }) {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-4">
                <div className="bg-gray-100 p-3 rounded-lg">
@@ -646,35 +800,46 @@ export default function Admin({ onPageChange, onLogout }) {
               </div>
             </div>
           </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-4">
+              <div className="bg-gray-100 p-3 rounded-lg">
+                <Users className="text-gray-600" size={24} />
+              </div>
+              <div>
+                <p className="text-gray-600 text-sm">Total Users</p>
+                <p className="text-2xl font-bold text-gray-800">{stats.totalUsers || 0}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
         <div className="bg-white rounded-lg shadow mb-6">
-          <div className="flex border-b">
+          <div className="flex border-b overflow-x-auto whitespace-nowrap">
             <button
               onClick={() => setActiveTab("dashboard")}
-              className={`px-6 py-4 font-semibold transition ${activeTab === "dashboard" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-4 sm:px-6 py-4 font-semibold transition shrink-0 ${activeTab === "dashboard" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <BarChart3 className="inline mr-2" size={20} />
               Dashboard
             </button>
             <button
               onClick={() => setActiveTab("products")}
-              className={`px-6 py-4 font-semibold transition ${activeTab === "products" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-4 sm:px-6 py-4 font-semibold transition shrink-0 ${activeTab === "products" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <Package className="inline mr-2" size={20} />
               Products
             </button>
             <button
               onClick={() => setActiveTab("orders")}
-              className={`px-6 py-4 font-semibold transition ${activeTab === "orders" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-4 sm:px-6 py-4 font-semibold transition shrink-0 ${activeTab === "orders" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <ShoppingCart className="inline mr-2" size={20} />
               Orders
             </button>
             <button
               onClick={() => setActiveTab("notifications")}
-              className={`px-6 py-4 font-semibold transition relative ${activeTab === "notifications" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-4 sm:px-6 py-4 font-semibold transition relative shrink-0 ${activeTab === "notifications" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <Bell className="inline mr-2" size={20} />
               Notifications
@@ -686,14 +851,14 @@ export default function Admin({ onPageChange, onLogout }) {
             </button>
             <button
               onClick={() => setActiveTab("users")}
-              className={`px-6 py-4 font-semibold transition ${activeTab === "users" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-4 sm:px-6 py-4 font-semibold transition shrink-0 ${activeTab === "users" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <Users className="inline mr-2" size={20} />
               Users
             </button>
             <button
               onClick={() => setActiveTab("carousel")}
-              className={`px-6 py-4 font-semibold transition ${activeTab === "carousel" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`px-4 sm:px-6 py-4 font-semibold transition shrink-0 ${activeTab === "carousel" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
             >
               <TrendingUp className="inline mr-2" size={20} />
               Carousel
@@ -760,11 +925,11 @@ export default function Admin({ onPageChange, onLogout }) {
         {/* Products Tab */}
         {activeTab === "products" && (
           <div className="bg-white rounded-lg shadow">
-            <div className="p-6 border-b flex justify-between items-center">
+            <div className="p-4 sm:p-6 border-b flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
               <h3 className="text-xl font-bold text-gray-800">Products ({products.length})</h3>
               <button
                 onClick={handleAddProduct}
-                className="bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
+                className="w-full sm:w-auto justify-center bg-gradient-to-r from-blue-700 to-cyan-600 hover:from-blue-600 hover:to-cyan-500 text-white px-5 py-3 rounded-xl flex items-center gap-2 transition font-semibold"
               >
                 <Plus size={20} />
                 Add Product
@@ -803,7 +968,7 @@ export default function Admin({ onPageChange, onLogout }) {
                             <Edit2 size={18} />
                           </button>
                           <button
-                            onClick={() => handleDeleteProduct(product._id)}
+                            onClick={() => handleDeleteProduct(getEntityId(product))}
                             className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
                           >
                             <Trash2 size={18} />
@@ -880,28 +1045,33 @@ export default function Admin({ onPageChange, onLogout }) {
                               value={order.status}
                               onChange={(e) => handleUpdateOrderStatus(order.id || order._id, e.target.value, trackingInputs[order.id || order._id] ?? order.tracking_location ?? "")}
                               className="border rounded-lg px-2 py-1 text-sm"
+                              disabled={order.status === "Cancelled"}
                             >
                               <option value="Pending">Pending</option>
                               <option value="Processing">Processing</option>
                               <option value="Shipped">Shipped</option>
                               <option value="Delivered">Delivered</option>
-                              <option value="Cancelled">Cancelled</option>
+                              {order.status === "Cancelled" && (
+                                <option value="Cancelled">Cancelled</option>
+                              )}
                             </select>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={trackingInputs[order.id || order._id] ?? order.tracking_location ?? ""}
-                                onChange={(e) => setTrackingInputs(prev => ({ ...prev, [order.id || order._id]: e.target.value }))}
-                                placeholder="Tracking location"
-                                className="w-full border rounded-lg px-2 py-1 text-sm"
-                              />
-                              <button
-                                onClick={() => handleUpdateOrderStatus(order.id || order._id, order.status, trackingInputs[order.id || order._id] ?? order.tracking_location ?? "")}
-                                className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
-                              >
-                                Save
-                              </button>
-                            </div>
+                            {order.status !== "Cancelled" && (
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={trackingInputs[order.id || order._id] ?? order.tracking_location ?? ""}
+                                  onChange={(e) => setTrackingInputs(prev => ({ ...prev, [order.id || order._id]: e.target.value }))}
+                                  placeholder="Tracking location"
+                                  className="w-full border rounded-lg px-2 py-1 text-sm"
+                                />
+                                <button
+                                  onClick={() => handleUpdateOrderStatus(order.id || order._id, order.status, trackingInputs[order.id || order._id] ?? order.tracking_location ?? "")}
+                                  className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            )}
                           </div>
                           <button
                             onClick={() => handleDeleteOrder(order.id || order._id)}
@@ -956,7 +1126,7 @@ export default function Admin({ onPageChange, onLogout }) {
                       <td className="px-6 py-4 text-gray-600">{user.phone || "-"}</td>
                       <td className="px-6 py-4 text-gray-600">{user.city || "-"}</td>
                       <td className="px-6 py-4 text-gray-600">{user.state || "-"}</td>
-                      <td className="px-6 py-4 text-gray-600">{user.zipCode || "-"}</td>
+                      <td className="px-6 py-4 text-gray-600">{user.zipCode || user.zip_code || "-"}</td>
                       <td className="px-6 py-4 text-gray-600">{user.country || "-"}</td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 rounded-full text-sm ${user.role === "admin" ? "bg-gray-800 text-white" : "bg-gray-200 text-gray-700"}`}>
@@ -1088,7 +1258,7 @@ export default function Admin({ onPageChange, onLogout }) {
               <h2 className="text-xl font-bold text-gray-800">
                 {editingProduct ? "Edit Product" : "Add New Product"}
               </h2>
-              <button onClick={() => setShowProductModal(false)} className="text-gray-500 hover:text-gray-700">
+              <button onClick={closeProductModal} className="text-gray-500 hover:text-gray-700">
                 <X size={24} />
               </button>
             </div>
@@ -1130,18 +1300,24 @@ export default function Admin({ onPageChange, onLogout }) {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select
+                <input
+                  list="admin-product-categories"
                   value={productForm.category}
                   onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  placeholder="Select or type category"
                   required
-                >
-                  <option value="">Select category</option>
-                  <option value="Running Sneakers">Running Sneakers</option>
-                  <option value="Casual Sneakers">Casual Sneakers</option>
-                  <option value="Watches">Watches</option>
-                  <option value="Belts">Belts</option>
-                </select>
+                />
+                <datalist id="admin-product-categories">
+                  {productCategories.map((category) => (
+                    <option key={category} value={category} />
+                  ))}
+                </datalist>
+                {productCategories.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Saved categories: {productCategories.join(", ")}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -1170,12 +1346,24 @@ export default function Admin({ onPageChange, onLogout }) {
                     </label>
                   </div>
 
+                  <input
+                    type="text"
+                    value={productForm.image_url}
+                    onChange={(e) => handleImageUrlChange(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                    placeholder="Enter image URL (e.g., /images/SHOE1.jpg)"
+                  />
+
                   {imagePreview && (
                     <div className="mt-4">
-                      <img src={imagePreview} alt="Preview" className="max-h-32 mx-auto rounded-lg" />
+                      <img src={resolveImageUrl(imagePreview)} alt="Preview" className="max-h-32 mx-auto rounded-lg" />
                       <button
                         type="button"
-                        onClick={() => { setSelectedImage(null); setImagePreview(null); }}
+                        onClick={() => {
+                          setSelectedImage(null);
+                          setImagePreview("");
+                          setProductForm((prev) => ({ ...prev, image_url: "" }));
+                        }}
                         className="mt-2 text-red-500 text-sm"
                       >
                         Remove
@@ -1183,19 +1371,6 @@ export default function Admin({ onPageChange, onLogout }) {
                     </div>
                   )}
 
-                  {!imagePreview && (
-                    <input
-                      type="text"
-                      value={productForm.image_url}
-                      onChange={(e) => {
-                        setProductForm({ ...productForm, image_url: e.target.value });
-                        setSelectedImage(null);
-                        setImagePreview(e.target.value);
-                      }}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
-                      placeholder="Enter image URL (e.g., /images/SHOE1.jpg)"
-                    />
-                  )}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Upload a file or enter a URL</p>
               </div>
@@ -1203,7 +1378,7 @@ export default function Admin({ onPageChange, onLogout }) {
               <div className="flex gap-4 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowProductModal(false)}
+                  onClick={closeProductModal}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   Cancel

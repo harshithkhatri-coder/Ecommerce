@@ -9,9 +9,9 @@ export default function Products({ onAddToCart, onPageChange }) {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOption, setSortOption] = useState("featured");
-  const [products, setProducts] = useState(productsData); // Load static data immediately
+  const [products, setProducts] = useState(productsData); // Fallback data
   const [wishlist, setWishlist] = useState([]);
-  const loading = false; // Static data loads instantly, no loading state needed
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchProducts();
@@ -19,24 +19,31 @@ export default function Products({ onAddToCart, onPageChange }) {
   }, []);
 
   const fetchProducts = async () => {
-    // Create an AbortController for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-    
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // allow API cold start
+
     try {
+      setLoading(true);
       const response = await fetch(`${API_BASE_URL}/products`, {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Products request failed with status ${response.status}`);
+      }
+
       const data = await response.json();
-      if (data.success && data.data && data.data.length > 0) {
+      if (data.success && Array.isArray(data.data)) {
+        // Use API data even when it's empty to reflect actual backend state.
         setProducts(data.data);
       }
-      // If API fails or returns empty, keep using static data
     } catch (err) {
       clearTimeout(timeoutId);
       console.error("Error fetching products:", err);
-      // Keep using static data from initial state
+      setProducts(productsData);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -48,8 +55,8 @@ export default function Products({ onAddToCart, onPageChange }) {
       const response = await fetch(`${API_BASE_URL}/wishlist/${user.id}`);
       const data = await response.json();
       if (data.success) {
-        const wishlistIds = data.data.map(item => item._id);
-        setWishlist(wishlistIds);
+        const wishlistIds = (data.data || []).map(item => item._id || item.id);
+        setWishlist(wishlistIds.filter(Boolean));
       }
     } catch (err) {
       console.error("Error fetching wishlist:", err);
@@ -75,7 +82,8 @@ export default function Products({ onAddToCart, onPageChange }) {
         });
         const data = await response.json();
         if (data.success) {
-          setWishlist(data.data || []);
+          const wishlistIds = (data.data || []).map(item => item._id || item.id);
+          setWishlist(wishlistIds.filter(Boolean));
         }
       } else {
         const response = await fetch(`${API_BASE_URL}/wishlist/${user.id}/${product._id}`, {
@@ -83,8 +91,8 @@ export default function Products({ onAddToCart, onPageChange }) {
         });
         const data = await response.json();
         if (data.success) {
-          const wishlistIds = (data.data || []).map(item => item._id);
-          setWishlist(wishlistIds);
+          const wishlistIds = (data.data || []).map(item => item._id || item.id);
+          setWishlist(wishlistIds.filter(Boolean));
         }
       }
     } catch (err) {

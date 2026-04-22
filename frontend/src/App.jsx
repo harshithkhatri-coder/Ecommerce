@@ -11,23 +11,52 @@ import Admin from "./Admin";
 import Footer from "./Footer";
 import SearchPage from "./SearchPage";
 import AddAddress from "./AddAddress";
+import ResetPassword from "./ResetPassword";
 import './App.css';
 
+function loadStoredUser() {
+  const savedUser = localStorage.getItem("user");
+  const savedAdminUser = localStorage.getItem("adminUser");
+
+  try {
+    if (savedAdminUser) {
+      const parsedAdmin = JSON.parse(savedAdminUser);
+      if (parsedAdmin?.role === "admin") return parsedAdmin;
+    }
+  } catch (error) {
+    localStorage.removeItem("adminUser");
+  }
+
+  try {
+    return savedUser ? JSON.parse(savedUser) : null;
+  } catch (error) {
+    localStorage.removeItem("user");
+    return null;
+  }
+}
+
 export default function App() {
+  const query = new URLSearchParams(window.location.search);
+  const resetTokenFromUrl = query.get("token") || "";
+  const initialPageFromUrl = query.get("page") === "reset-password" ? "ResetPassword" : "Home";
   const [currentPage, setCurrentPage] = useState("Home");
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [cart, setCart] = useState([]);
-  const [user, setUser] = useState(() => {
-    // Load user from localStorage on mount
-    const savedUser = localStorage.getItem("user");
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
+  const [user, setUser] = useState(() => loadStoredUser());
+  const [resetToken, setResetToken] = useState(resetTokenFromUrl);
+
+  useEffect(() => {
+    if (initialPageFromUrl === "ResetPassword" && resetTokenFromUrl) {
+      setCurrentPage("ResetPassword");
+      setResetToken(resetTokenFromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Listen for localStorage changes (login/logout from other tabs or Login component)
   useEffect(() => {
     const handleUserChange = () => {
-      const savedUser = localStorage.getItem("user");
-      setUser(savedUser ? JSON.parse(savedUser) : null);
+      setUser(loadStoredUser());
     };
     
     // Listen for storage events from other tabs
@@ -35,10 +64,12 @@ export default function App() {
     
     // Listen for custom event from same-tab login
     window.addEventListener("userLoggedIn", handleUserChange);
+    window.addEventListener("adminLoggedIn", handleUserChange);
     
     return () => {
       window.removeEventListener("storage", handleUserChange);
       window.removeEventListener("userLoggedIn", handleUserChange);
+      window.removeEventListener("adminLoggedIn", handleUserChange);
     };
   }, []);
 
@@ -88,9 +119,8 @@ export default function App() {
 
   const handlePageChange = (page, productId = null) => {
     setCurrentPage(page);
-    if (productId) {
-      setSelectedProductId(productId);
-    }
+    setSelectedProductId(productId);
+    window.scrollTo({ top: 0, behavior: "auto" });
   };
 
   // Unified logout function - clears all auth
@@ -121,28 +151,11 @@ export default function App() {
         return <Profile onPageChange={handlePageChange} />;
       case "AddAddress":
         return <AddAddress onPageChange={handlePageChange} user={user} />;
+      case "ResetPassword":
+        return <ResetPassword token={resetToken} onPageChange={handlePageChange} />;
       case "Search":
         return <SearchPage searchQuery="" onPageChange={handlePageChange} onAddToCart={addToCart} />;
       case "Admin":
-
-        // Check if user is admin (check both state and localStorage for admin role)
-        const localStorageUser = localStorage.getItem("user");
-        const localStorageAdminUser = localStorage.getItem("adminUser");
-        let storedUser = null;
-        try {
-          if (localStorageUser) {
-            storedUser = JSON.parse(localStorageUser);
-          } else if (localStorageAdminUser) {
-            storedUser = JSON.parse(localStorageAdminUser);
-          }
-        } catch (e) {
-          console.error("Error parsing user from localStorage", e);
-        }
-        
-        if (!isAdmin && (!user || user.role !== "admin") && (!storedUser || storedUser.role !== "admin")) {
-          alert("Access denied. Admin only.");
-          return <Home cart={cart} onAddToCart={addToCart} onPageChange={handlePageChange} />;
-        }
         return <Admin onPageChange={handlePageChange} onLogout={handleLogout} />;
       case "Contact":
         return (
