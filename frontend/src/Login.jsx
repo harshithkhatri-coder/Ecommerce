@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 
-const API_BASE_URL = "/api";
+const API_BASE_URL = "https://ecommerce-3rcc.onrender.com/api"; 
 
 export default function Login({ onPageChange }) {
   const [isLogin, setIsLogin] = useState(true);
