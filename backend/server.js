@@ -25,28 +25,26 @@ app.use(express.json());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Serve static images
+// Static
 app.use('/images', express.static(path.join(__dirname, 'public/images')));
 
-
-// ✅ ROOT ROUTE FIX (IMPORTANT)
+// ===== ROOT =====
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "🚀 Velux Kicks Backend is running successfully!",
+    message: "🚀 Backend is running",
     endpoints: {
       health: "/api/health",
       products: "/api/products",
-      test: "/api/test"
+      login: "/api/auth/login"
     }
   });
 });
 
-
-// ===== MONGOOSE MODELS =====
+// ===== MODELS =====
 const userSchema = new mongoose.Schema({
   name: String,
-  email: String,
+  email: { type: String, unique: true },
   password: String,
   role: { type: String, default: "user" }
 });
@@ -62,25 +60,87 @@ const productSchema = new mongoose.Schema({
 });
 const Product = mongoose.model("Product", productSchema);
 
+// ===== AUTH ROUTES =====
 
-// ===== TEST ROUTES =====
-app.get("/api/test", async (req, res) => {
+// Register
+app.post("/api/auth/register", async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password)
+    return res.status(400).json({ success: false, message: "All fields required" });
+
+  try {
+    const existing = await User.findOne({ email });
+    if (existing)
+      return res.status(400).json({ success: false, message: "User already exists" });
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    const user = await User.create({ name, email, password: hashed });
+
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
+
+    res.json({
+      success: true,
+      message: "Registered successfully",
+      data: { id: user._id, name, email, token }
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Registration failed" });
+  }
+});
+
+// Login
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password)
+    return res.status(400).json({ success: false, message: "Email & password required" });
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(404).json({ success: false, message: "User not found" });
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid)
+      return res.status(401).json({ success: false, message: "Invalid password" });
+
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
+
+    res.json({
+      success: true,
+      message: "Login successful",
+      data: { id: user._id, name: user.name, email: user.email, token }
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Login failed" });
+  }
+});
+
+// ===== TEST =====
+app.get("/api/test", (req, res) => {
   res.json({ success: true, message: "API working!" });
 });
 
+// ===== PRODUCTS =====
 app.get("/api/products", async (req, res) => {
-  const products = await Product.find();
-  res.json({ success: true, data: products });
+  try {
+    const products = await Product.find();
+    res.json({ success: true, data: products });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to fetch products" });
+  }
 });
 
-
-// ===== HEALTH CHECK =====
+// ===== HEALTH =====
 app.get("/api/health", (req, res) => {
   res.json({ success: true, message: "Server is running" });
 });
 
-
-// ===== 404 HANDLER =====
+// ===== 404 =====
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -88,8 +148,7 @@ app.use((req, res) => {
   });
 });
 
-
-// ===== START SERVER AFTER DB CONNECT =====
+// ===== START SERVER =====
 async function startServer() {
   try {
     await mongoose.connect(MONGO_URI);
