@@ -73,8 +73,7 @@ export default function App() {
     };
   }, []);
 
-  // Check if user is admin (derived from user state)
-  const isAdmin = user?.role === "admin";
+
 
   const addToCart = (product, options = {}) => {
     // Calculate current total items in cart
