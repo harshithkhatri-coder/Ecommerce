@@ -28,7 +28,7 @@ export default function Footer({ onPageChange }) {
             <div>
               <div className="flex items-center gap-3 mb-4">
                  <img
-                  src={SHOE1}
+                  src={Logo}
                   alt="VELUX KICKS Logo"
                   className="w-12 h-12 rounded-full border-2 border-gray-400 object-cover"
                 />
