@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Mail, Phone, Instagram, X } from "lucide-react";
-import SHOE1 from "./images/SHOE1.jpg";
+import Logo from "./images/Logo.jpg";
 import LegalModal from "./LegalPages";
 import ShippingInfo from "./ShippingInfo";
 
