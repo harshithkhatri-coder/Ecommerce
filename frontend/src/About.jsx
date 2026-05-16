@@ -28,22 +28,22 @@ export default function About() {
               Our commitment is to provide the best quality products at competitive prices with exceptional customer service.
             </p>
           </div>
-          <div>
+          <div className="flex justify-center items-center">
             <img
-              src={require('./images/WhatsApp Image 2026-01-13 at 7.57.38 PM.jpeg')}
+              src="/images/WhatsApp Image 2026-01-13 at 7.57.38 PM.jpeg"
               alt="About Us"
-              className="rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105 object-cover w-full h-96"
+              className="rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105 object-cover w-full h-96 max-w-lg"
             />
           </div>
         </div>
 
         {/* Mission & Vision */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
-          <div>
+          <div className="flex justify-center items-center">
             <img
-              src={require('./images/WhatsApp Image 2026-01-13 at 7.57.39 PM.jpeg')}
+              src="/images/WhatsApp Image 2026-01-13 at 7.57.39 PM.jpeg"
               alt="Mission"
-              className="rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105 object-cover w-full h-96"
+              className="rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105 object-cover w-full h-96 max-w-lg"
             />
           </div>
           <div>
@@ -103,12 +103,11 @@ export default function About() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16">
           {[
-            { label: "Happy Customers", value: "500K+" },
-            { label: "Products Sold", value: "2M+" },
-            { label: "Years in Business", value: "10+" },
-            { label: "Customer Satisfaction", value: "98%" },
+            { label: "Happy Customers", value: "500" },
+            { label: "Years in Business", value: "2" },
+            { label: "Customer Satisfaction", value: "99%" },
           ].map((stat, index) => (
             <div key={index} className="bg-gradient-to-br from-gray-600 to-gray-500 rounded-lg p-6 text-center">
                <p className="text-3xl font-bold text-white">{stat.value}</p>

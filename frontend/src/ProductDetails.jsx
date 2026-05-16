@@ -20,7 +20,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
       try {
         const response = await fetch(`${API_BASE_URL}/products/${productId}`);
         const data = await response.json();
-        if (data.success) {
+        if (response.ok && data.success) {
           setProduct(data.data);
         } else {
           // API returned no product, try static data fallback

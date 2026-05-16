@@ -9,7 +9,6 @@ const ShippingInfo = () => {
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Shipping Rates</h3>
         <ul className="list-disc pl-5 space-y-1">
           <li>Standard Shipping: ₹99 (Free for orders above ₹500)</li>
-          <li>Express Shipping: ₹199 (Delivered in 2-3 business days)</li>
           <li>Free Shipping on all orders above ₹500</li>
         </ul>
       </div>
@@ -18,7 +17,6 @@ const ShippingInfo = () => {
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Delivery Timeframe</h3>
         <ul className="list-disc pl-5 space-y-1">
           <li>Standard Shipping: 5-7 business days</li>
-          <li>Express Shipping: 2-3 business days</li>
           <li>Metro cities may receive deliveries faster</li>
           <li>Rural and remote areas may take additional 2-3 days</li>
         </ul>
@@ -36,11 +34,8 @@ const ShippingInfo = () => {
 
       <div>
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Tracking Your Order</h3>
-        <p>Once your order is shipped, you will receive a tracking number via email and SMS. You can track your order using:</p>
         <ul className="list-disc pl-5 space-y-1 mt-2">
-          <li>The tracking link in your shipping confirmation email</li>
-          <li>Entering your tracking number on our website's Track Order page</li>
-          <li>Downloading our mobile app for real-time updates</li>
+          <li>Order location is showing when updated by the courier </li>
         </ul>
       </div>
 
@@ -60,10 +55,18 @@ const ShippingInfo = () => {
       </div>
 
       <div>
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">Return</h3>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Return is only possible if the wrong size has been delivered or the product has been damaged.</li>
+          <li>The customer is supposed to make an unboxing video of the parcel to claim the damage.</li>
+        </ul>
+      </div>
+
+      <div>
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Contact Us</h3>
         <p>For any shipping-related queries, please contact us at:</p>
-        <p className="mt-1">Email: support@veluxkicks.com</p>
-        <p>Phone: +91 98765 43210</p>
+        <p className="mt-1">Email: veluxkicks11@gmail.com</p>
+        <p>Phone: +91 7676526044</p>
       </div>
     </div>
   );

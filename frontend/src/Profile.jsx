@@ -123,24 +123,6 @@ export default function Profile({ onPageChange }) {
     }
   };
 
-  const getTrackingReference = (order) => {
-    return order.tracking_number || order.order_id || "";
-  };
-
-  const openTrackingLink = (order) => {
-    const reference = getTrackingReference(order);
-    if (!reference) {
-      alert("No tracking reference available for this order.");
-      return;
-    }
-
-    const trackingUrl = `https://www.google.com/search?q=${encodeURIComponent(
-      `track package ${reference}`
-    )}`;
-    window.open(trackingUrl, "_blank");
-  };
-
-
   const handleEdit = () => {
     setIsEditing(true);
     setEditData(profileData);
@@ -225,7 +207,7 @@ export default function Profile({ onPageChange }) {
   return (
     <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
       {/* Header */}
-        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-12 px-4 shadow-lg">
+      <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-12 px-4 shadow-lg">
         <div className="max-w-6xl mx-auto flex justify-between items-start">
           <div>
             <h1 className="text-4xl font-bold mb-2">My Profile</h1>
@@ -332,7 +314,7 @@ export default function Profile({ onPageChange }) {
                     </div>
                   </div>
                 </div>
-              ) : showWishlist ? (
+              ) : showWishlist && !isEditing ? (
                 /* Wishlist Section */
                 <div className="space-y-6">
                   <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -588,17 +570,6 @@ export default function Profile({ onPageChange }) {
                       {order.cancellation_reason && (
                         <p className="mt-2 text-sm text-gray-600">Cancellation reason: {order.cancellation_reason}</p>
                       )}
-                      <div className="mt-4 flex flex-wrap gap-3 items-center">
-                        {order.status !== "Cancelled" && (
-                          <button
-                            onClick={() => openTrackingLink(order)}
-                            className="px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:shadow-lg transition"
-                          >
-                            Track Package
-                          </button>
-                        )}
-                        <p className="text-sm text-gray-500">Reference: {getTrackingReference(order)}</p>
-                      </div>
                     </div>
                   ))}
                 </div>

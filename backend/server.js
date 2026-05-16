@@ -335,6 +335,48 @@ app.get("/api/products/:id", async (req, res) => {
   }
 });
 
+// ===== PRODUCT REVIEWS =====
+const reviewSchema = new mongoose.Schema({
+  product_id: { type: String, required: true },
+  user: { type: String, required: true },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  comment: { type: String, required: true },
+  images: [String],
+  created_at: { type: Date, default: Date.now }
+});
+const Review = mongoose.model("Review", reviewSchema);
+
+app.get("/api/products/:id/reviews", async (req, res) => {
+  try {
+    const reviews = await Review.find({ product_id: req.params.id }).sort({ created_at: -1 });
+    res.json({ success: true, data: reviews });
+  } catch (err) {
+    console.error("Error fetching reviews:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch reviews" });
+  }
+});
+
+app.post("/api/products/:id/reviews", async (req, res) => {
+  const { user, rating, comment } = req.body;
+
+  if (!user || !rating || !comment) {
+    return res.status(400).json({ success: false, message: "User, rating, and comment are required" });
+  }
+
+  try {
+    const review = await Review.create({
+      product_id: req.params.id,
+      user,
+      rating: Number(rating),
+      comment
+    });
+    res.status(201).json({ success: true, data: review });
+  } catch (err) {
+    console.error("Error creating review:", err);
+    res.status(500).json({ success: false, message: "Failed to create review" });
+  }
+});
+
 const forgotPasswordHandler = async (req, res) => {
   const normalizedEmail = normalizeEmail(req.body?.email || "");
 

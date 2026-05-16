@@ -929,7 +929,7 @@ export default function Admin({ onPageChange, onLogout }) {
               <h3 className="text-xl font-bold text-gray-800">Products ({products.length})</h3>
               <button
                 onClick={handleAddProduct}
-                className="w-full sm:w-auto justify-center bg-gradient-to-r from-blue-700 to-cyan-600 hover:from-blue-600 hover:to-cyan-500 text-white px-5 py-3 rounded-xl flex items-center gap-2 transition font-semibold"
+                className="w-full sm:w-auto justify-center bg-gray-600 hover:bg-gray-700 text-white px-5 py-3 rounded-lg flex items-center gap-2 transition font-semibold"
               >
                 <Plus size={20} />
                 Add Product
@@ -1045,15 +1045,12 @@ export default function Admin({ onPageChange, onLogout }) {
                               value={order.status}
                               onChange={(e) => handleUpdateOrderStatus(order.id || order._id, e.target.value, trackingInputs[order.id || order._id] ?? order.tracking_location ?? "")}
                               className="border rounded-lg px-2 py-1 text-sm"
-                              disabled={order.status === "Cancelled"}
                             >
                               <option value="Pending">Pending</option>
                               <option value="Processing">Processing</option>
                               <option value="Shipped">Shipped</option>
                               <option value="Delivered">Delivered</option>
-                              {order.status === "Cancelled" && (
-                                <option value="Cancelled">Cancelled</option>
-                              )}
+                              <option value="Cancelled">Cancelled</option>
                             </select>
                             {order.status !== "Cancelled" && (
                               <div className="flex gap-2">
@@ -1397,7 +1394,7 @@ export default function Admin({ onPageChange, onLogout }) {
 
       {/* Notifications Tab */}
       {activeTab === "notifications" && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-6 max-w-5xl mx-auto">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               <Bell className="text-gray-600" size={28} />
