@@ -300,14 +300,24 @@ const handleBuyNow = () => {
               </span>
             </div>
 
-            {/* Price */}
+{/* Price */}
             <div className="border-t-2 border-b-2 border-gray-200 py-4 mb-6">
               <div className="flex items-baseline gap-2 mb-2">
                  <span className="text-2xl md:text-4xl font-bold text-gray-800">₹{product.price}</span>
-                <span className="text-lg text-gray-500 line-through">₹{Math.round(product.price * 1.2)}</span>
-                 <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm font-semibold">
-                  20% OFF
-                </span>
+                {product.original_price && product.original_price > product.price ? (
+                  <span className="text-lg text-gray-500 line-through">₹{product.original_price}</span>
+                ) : (
+                  <span className="text-lg text-gray-500 line-through">₹{Math.round(product.price * 1.2)}</span>
+                )}
+                 {product.offer ? (
+                   <span className="bg-gray-600 text-white px-3 py-1 rounded text-sm font-semibold">
+                     {product.offer}
+                   </span>
+                 ) : (
+                   <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm font-semibold">
+                     20% OFF
+                   </span>
+                 )}
               </div>
               <p className="text-gray-600 text-sm">Inclusive of all taxes</p>
             </div>
@@ -316,8 +326,7 @@ const handleBuyNow = () => {
             <div>
               <h3 className="text-lg font-bold text-gray-800 mb-3">Product Description</h3>
               <p className="text-gray-700 leading-relaxed">
-                Premium quality {product.name.toLowerCase()} designed for comfort and style. Made with high-grade materials,
-                these products are perfect for everyday wear. Experience superior comfort and durability with our collection.
+                {product.description || `Premium quality ${product.name.toLowerCase()} designed for comfort and style. Made with high-grade materials, these products are perfect for everyday wear. Experience superior comfort and durability with our collection.`}
               </p>
             </div>
           </div>
@@ -396,7 +405,7 @@ const handleBuyNow = () => {
 
         {/* Reviews Section */}
         <div className="mt-16">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6">Customer Reviews</h2>
+          <h2 className="text-3xl font-bold text-white mb-6">Customer Reviews</h2>
           <div className="space-y-6">
             {reviews.length > 0 ? (
               reviews.map((review, index) => (
@@ -431,9 +440,9 @@ const handleBuyNow = () => {
                   )}
                 </div>
               ))
-            ) : (
-              <p className="text-gray-600">No reviews yet.</p>
-            )}
+) : (
+               <p className="text-white">No reviews yet.</p>
+             )}
           </div>
 
           {/* Add Review Form */}

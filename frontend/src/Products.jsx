@@ -258,14 +258,21 @@ export default function Products({ onAddToCart, onPageChange }) {
                       />
                     </button>
                   </div>
-                  <h2
+<h2
                     onClick={() => onPageChange("ProductDetails", product._id || product.id)}
                      className="text-lg font-semibold text-gray-800 mb-2 cursor-pointer hover:text-gray-700 transition"
                   >
                     {product.name}
                   </h2>
-                   <p className="text-2xl font-bold text-gray-800 mb-3">₹{product.price}</p>
-                  <div className="grid grid-cols-2 gap-2">
+                   <div className="flex items-baseline gap-2 mb-3">
+                     <p className="text-2xl font-bold text-gray-800">₹{product.price}</p>
+                     {product.offer && (
+                       <span className="bg-gray-600 text-white px-2 py-1 rounded text-xs font-semibold">
+                         {product.offer}
+                       </span>
+                     )}
+                   </div>
+                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => onPageChange("ProductDetails", product._id || product.id)}
                       className="bg-gradient-to-r from-gray-600 to-gray-700 text-white py-2 rounded-xl hover:shadow-lg transition font-semibold text-sm"

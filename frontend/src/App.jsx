@@ -116,6 +116,7 @@ export default function App() {
     }
   };
 
+
   const handlePageChange = (page, productId = null) => {
     setCurrentPage(page);
     setSelectedProductId(productId);
@@ -131,6 +132,33 @@ export default function App() {
     setUser(null);
     handlePageChange("Home");
   };
+
+  // Auto-logout after 2 hours of inactivity
+  useEffect(() => {
+    let timeoutId;
+    const TWO_HOURS = 2 * 60 * 60 * 1000; // 7,200,000 milliseconds
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      if (user) {
+        timeoutId = setTimeout(() => {
+          handleLogout();
+          alert("You have been logged out due to inactivity.");
+        }, TWO_HOURS);
+      }
+    };
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => document.addEventListener(event, resetTimer, { passive: true }));
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(event => document.removeEventListener(event, resetTimer, { passive: true }));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const renderPage = () => {
     switch (currentPage) {

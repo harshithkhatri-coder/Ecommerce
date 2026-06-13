@@ -67,13 +67,15 @@ export default function Admin({ onPageChange, onLogout }) {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const [productForm, setProductForm] = useState({
+const [productForm, setProductForm] = useState({
     name: "",
     price: "",
+    original_price: "",
     category: "",
     stock: "",
     description: "",
     image_url: "",
+    offer: "",
   });
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -447,32 +449,36 @@ export default function Admin({ onPageChange, onLogout }) {
     }
   };
 
-  const handleAddProduct = () => {
+const handleAddProduct = () => {
     setActiveTab("products");
     setEditingProduct(null);
     setProductForm({
       name: "",
       price: "",
+      original_price: "",
       category: "",
       stock: "",
       description: "",
       image_url: "",
+      offer: "",
     });
     setSelectedImage(null);
     setImagePreview(null);
     setShowProductModal(true);
   };
 
-  const handleEditProduct = (product) => {
+const handleEditProduct = (product) => {
     setActiveTab("products");
     setEditingProduct(product);
     setProductForm({
       name: product.name || "",
       price: product.price?.toString() || "",
+      original_price: product.original_price?.toString() || "",
       category: product.category || "",
       stock: product.stock?.toString() || "",
       description: product.description || "",
       image_url: product.image_url || product.image || "",
+      offer: product.offer || "",
     });
     setSelectedImage(null);
     setImagePreview(product.image_url || product.image || "");
@@ -498,64 +504,44 @@ export default function Admin({ onPageChange, onLogout }) {
     setImagePreview(value);
   };
 
-  const handleSaveProduct = async (e) => {
+const handleSaveProduct = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("adminToken");
-    const normalizedProductForm = {
-      ...productForm,
-      name: productForm.name.trim(),
-      category: productForm.category.trim(),
-      description: productForm.description.trim(),
-      image_url: productForm.image_url.trim()
-    };
-
-    if (!normalizedProductForm.category) {
-      alert("Please select or enter a category");
+    const editingProductId = getEntityId(editingProduct);
+    
+    if (editingProduct && !editingProductId) {
+      alert("Cannot edit this product because its ID is missing.");
       return;
+    }
+    
+    const url = editingProduct
+      ? `${API_BASE_URL}/admin/products/${editingProductId}`
+      : `${API_BASE_URL}/admin/products`;
+
+    const method = editingProduct ? "PUT" : "POST";
+
+    const formData = new FormData();
+    formData.append("name", productForm.name.trim());
+    formData.append("price", productForm.price);
+    formData.append("original_price", productForm.original_price || productForm.price);
+    formData.append("category", productForm.category.trim());
+    formData.append("stock", productForm.stock);
+    formData.append("description", productForm.description.trim());
+    formData.append("offer", productForm.offer || "");
+    formData.append("image_url", productForm.image_url.trim());
+    
+    if (selectedImage) {
+      formData.append("image", selectedImage);
     }
 
     try {
-      const editingProductId = getEntityId(editingProduct);
-      if (editingProduct && !editingProductId) {
-        alert("Cannot edit this product because its ID is missing.");
-        return;
-      }
-      const url = editingProduct
-        ? `${API_BASE_URL}/admin/products/${editingProductId}`
-        : `${API_BASE_URL}/admin/products`;
-
-      const method = editingProduct ? "PUT" : "POST";
-
-      let response;
-      
-      // If there's a selected image file, use FormData
-      if (selectedImage) {
-        const formData = new FormData();
-        formData.append("name", normalizedProductForm.name);
-        formData.append("price", normalizedProductForm.price);
-        formData.append("category", normalizedProductForm.category);
-        formData.append("stock", normalizedProductForm.stock);
-        formData.append("description", normalizedProductForm.description);
-        formData.append("image", selectedImage);
-
-        response = await fetch(url, {
-          method,
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
-          body: formData,
-        });
-      } else {
-        // Use JSON for URL-based images
-        response = await fetch(url, {
-          method,
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(normalizedProductForm),
-        });
-      }
+      const response = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData,
+      });
 
       const data = await response.json();
 
@@ -1317,13 +1303,35 @@ export default function Admin({ onPageChange, onLogout }) {
                 )}
               </div>
 
-              <div>
+<div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
                   value={productForm.description}
                   onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
                   rows="3"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Offer (e.g., "20% OFF", "Buy 2 Get 1 Free")</label>
+                <input
+                  type="text"
+                  value={productForm.offer || ""}
+                  onChange={(e) => setProductForm({ ...productForm, offer: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  placeholder="Enter offer text or leave empty"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Original Price (₹) - leave empty to auto-calculate from offer</label>
+                <input
+                  type="number"
+                  value={productForm.original_price || ""}
+                  onChange={(e) => setProductForm({ ...productForm, original_price: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  placeholder="Enter original/MRP price (optional)"
                 />
               </div>
 

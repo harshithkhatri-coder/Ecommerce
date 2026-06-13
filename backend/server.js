@@ -84,10 +84,12 @@ const User = mongoose.model("User", userSchema);
 const productSchema = new mongoose.Schema({
   name: String,
   price: Number,
+  original_price: Number,
   category: String,
   stock: Number,
   description: String,
-  image_url: String
+  image_url: String,
+  offer: { type: String, default: "" }
 });
 const Product = mongoose.model("Product", productSchema);
 
@@ -569,7 +571,7 @@ app.get("/api/admin/products", adminAuth, async (req, res) => {
 
 app.post("/api/admin/products", adminAuth, upload.single("image"), async (req, res) => {
   try {
-    const { name, price, category, stock, description, image_url } = req.body;
+    const { name, price, original_price, category, stock, description, image_url, offer } = req.body;
     let imageUrl = image_url || "";
     
     if (req.file) {
@@ -579,10 +581,12 @@ app.post("/api/admin/products", adminAuth, upload.single("image"), async (req, r
     const product = await Product.create({ 
       name, 
       price: Number(price), 
+      original_price: original_price ? Number(original_price) : Number(price),
       category, 
       stock: Number(stock), 
       description, 
-      image_url: imageUrl 
+      image_url: imageUrl,
+      offer: offer || ""
     });
     res.json({ success: true, data: product });
   } catch (err) {
@@ -590,16 +594,30 @@ app.post("/api/admin/products", adminAuth, upload.single("image"), async (req, r
   }
 });
 
-app.put("/api/admin/products/:id", adminAuth, upload.single("image"), async (req, res) => {
+app.put("/api/admin/products/:id", adminAuth, (req, res, next) => {
+  if (req.headers['content-type']?.includes('multipart/form-data')) {
+    upload.single("image")(req, res, next);
+  } else {
+    next();
+  }
+}, async (req, res) => {
   try {
-    const { name, price, category, stock, description, image_url } = req.body;
+    const { name, price, original_price, category, stock, description, image_url, offer } = req.body;
     let imageUrl = image_url;
     
     if (req.file) {
       imageUrl = "/images/" + req.file.filename;
     }
     
-    const updateData = { name, price: Number(price), category, stock: Number(stock), description };
+    const updateData = { 
+      name, 
+      price: Number(price), 
+      original_price: original_price ? Number(original_price) : Number(price),
+      category, 
+      stock: Number(stock), 
+      description,
+      offer: offer || ""
+    };
     if (imageUrl) {
       updateData.image_url = imageUrl;
     }
@@ -612,6 +630,7 @@ app.put("/api/admin/products/:id", adminAuth, upload.single("image"), async (req
     if (!product) return res.status(404).json({ success: false, message: "Product not found" });
     res.json({ success: true, data: product });
   } catch (err) {
+    console.error("Product update error:", err);
     res.status(500).json({ success: false, message: "Failed to update product" });
   }
 });
