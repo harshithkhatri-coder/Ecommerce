@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "velux_kicks_secret_key_2024";
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "admin@veluxkicks.com").trim().toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin@12341";
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
 
 const MONGO_URI =
