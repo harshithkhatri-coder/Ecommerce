@@ -2,60 +2,73 @@ import React, { useState, useEffect } from "react";
 import Carousel from "./Carousel";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
+import AdBanner from "./AdBanner";
 
-// Sample products to show when API is unavailable
-const SAMPLE_PRODUCTS = [
-  {
-    _id: "sample1",
-    name: "Premium Running Shoes",
-    category: "Footwear",
-    image_url: "/images/SHOE1.jpg"
-  },
-  {
-    _id: "sample2",
-    name: "Classic Leather Sneakers",
-    category: "Footwear",
-    image_url: "/images/WhatsApp Image 2026-01-13 at 7.57.38 PM.jpeg"
-  },
-  {
-    _id: "sample3",
-    name: "Urban Style Collection",
-    category: "Fashion",
-    image_url: "/images/WhatsApp Image 2026-01-13 at 7.57.39 PM.jpeg"
-  }
-];
-
-export default function Home({ cart, onAddToCart, onPageChange }) {
-  const [highlightProducts, setHighlightProducts] = useState(SAMPLE_PRODUCTS);
+export default function Home({ cart, onAddToCart, onPageChange, user }) {
+  const [highlightProducts, setHighlightProducts] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort("Products request timed out"), 20000);
+
     const fetchProducts = async () => {
       setLoading(true);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
+
       try {
-        const response = await fetch(`${API_BASE_URL}/products`, {
+        const response = await fetch(`${API_BASE_URL}/products/featured`, {
           signal: controller.signal
         });
-        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Featured products request failed with status ${response.status}`);
+        }
+
         const data = await response.json();
-        if (data.success && data.data && data.data.length > 0) {
+        if (isMounted && data.success && Array.isArray(data.data) && data.data.length > 0) {
           setHighlightProducts(data.data.slice(0, 3));
+          return;
         }
       } catch (err) {
-        console.error("Error fetching products:", err);
+        if (!isMounted || err.name === "AbortError" || controller.signal.aborted) return;
+        console.error("Error fetching featured products:", err);
+      }
+
+      try {
+        const fallbackResponse = await fetch(`${API_BASE_URL}/products`, {
+          signal: controller.signal
+        });
+        if (isMounted && fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          if (fallbackData.success && Array.isArray(fallbackData.data)) {
+            setHighlightProducts(fallbackData.data.slice(0, 3));
+          }
+        }
+      } catch (err) {
+        if (!isMounted || err.name === "AbortError" || controller.signal.aborted) return;
+        console.error("Error fetching fallback products:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
+        clearTimeout(timeoutId);
       }
     };
 
     fetchProducts();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
   return (
     <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
+      <AdBanner user={user} onNavigate={onPageChange} />
+
       {/* Hero Carousel */}
       <Carousel />
 

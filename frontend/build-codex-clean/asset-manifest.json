@@ -1,0 +1,28 @@
+{
+  "files": {
+    "main.css": "/static/css/main.5f43e28f.css",
+    "main.js": "/static/js/main.0c8e9d24.js",
+    "static/js/453.ed5bcf6c.chunk.js": "/static/js/453.ed5bcf6c.chunk.js",
+    "static/media/Screenshot 2026-02-04 122857.png": "/static/media/Screenshot 2026-02-04 122857.f6924cd5a820d365a3d9.png",
+    "static/media/Screenshot 2026-02-04 123222.png": "/static/media/Screenshot 2026-02-04 123222.80cd99b37eecf2a146e6.png",
+    "static/media/Screenshot 2026-02-04 123126.png": "/static/media/Screenshot 2026-02-04 123126.ae0a405671f9b27237b4.png",
+    "static/media/Screenshot 2026-02-04 123246.png": "/static/media/Screenshot 2026-02-04 123246.d67c218bcf94ac32ef44.png",
+    "static/media/Screenshot 2026-02-04 123044.png": "/static/media/Screenshot 2026-02-04 123044.20f7f47db7d56ac671df.png",
+    "static/media/Screenshot 2026-02-04 122832.png": "/static/media/Screenshot 2026-02-04 122832.a231783bae56834b9d5b.png",
+    "static/media/Screenshot 2026-02-04 122545.png": "/static/media/Screenshot 2026-02-04 122545.ae0073e3ffa61ab32b0f.png",
+    "static/media/WhatsApp Image 2026-01-13 at 7.57.38 PM.jpeg": "/static/media/WhatsApp Image 2026-01-13 at 7.57.38 PM.f753f3767bf29fd6acd3.jpeg",
+    "static/media/Logo.jpg": "/static/media/Logo.84bcfd56ae8bc156d847.jpg",
+    "static/media/WhatsApp Image 2026-01-13 at 7.57.40 PM.jpeg": "/static/media/WhatsApp Image 2026-01-13 at 7.57.40 PM.ed3f1e61df8996833bf6.jpeg",
+    "static/media/WhatsApp Image 2026-01-13 at 7.57.39 PM.jpeg": "/static/media/WhatsApp Image 2026-01-13 at 7.57.39 PM.4f95680ed1b211885f25.jpeg",
+    "static/media/SHOE1.jpg": "/static/media/SHOE1.eb61210366904faa3dad.jpg",
+    "static/media/WhatsApp Image 2026-01-13 at 7.57.39 PM (1).jpeg": "/static/media/WhatsApp Image 2026-01-13 at 7.57.39 PM (1).5234fade329593234ce5.jpeg",
+    "index.html": "/index.html",
+    "main.5f43e28f.css.map": "/static/css/main.5f43e28f.css.map",
+    "main.0c8e9d24.js.map": "/static/js/main.0c8e9d24.js.map",
+    "453.ed5bcf6c.chunk.js.map": "/static/js/453.ed5bcf6c.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.5f43e28f.css",
+    "static/js/main.0c8e9d24.js"
+  ]
+}

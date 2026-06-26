@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Package, ShoppingCart, Users, DollarSign, Plus, Edit2, Trash2,
   Eye, X, Home, BarChart3, TrendingUp, Lock, Mail, LogOut, Upload,
-  Bell, CheckCircle
+  Bell, CheckCircle, Tag
 } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
@@ -53,6 +53,38 @@ export default function Admin({ onPageChange, onLogout }) {
   const [carouselItems, setCarouselItems] = useState(loadCarouselImages());
   const [editingCarousel, setEditingCarousel] = useState(false);
   const [carouselForm, setCarouselForm] = useState([]);
+  const [coupons, setCoupons] = useState([]);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState(null);
+  const [couponForm, setCouponForm] = useState({
+    code: "",
+    discount_type: "percentage",
+    discount_value: "",
+    min_order_value: "0",
+    max_discount: "0",
+    applicable_product_id: "",
+    is_active: true,
+    target_audience: "all",
+    allowed_user_ids: "",
+    usage_limit: "0",
+    usage_limit_per_user: "1"
+  });
+  const [ads, setAds] = useState([]);
+  const [showAdModal, setShowAdModal] = useState(false);
+  const [editingAd, setEditingAd] = useState(null);
+  const [adForm, setAdForm] = useState({
+    title: "",
+    message: "",
+    image_url: "",
+    link_url: "",
+    button_text: "Shop Now",
+    display_type: "banner",
+    is_active: true,
+    priority: "0",
+    start_date: "",
+    end_date: "",
+    target_audience: "all"
+  });
 
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -67,7 +99,7 @@ export default function Admin({ onPageChange, onLogout }) {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-const [productForm, setProductForm] = useState({
+  const [productForm, setProductForm] = useState({
     name: "",
     price: "",
     original_price: "",
@@ -76,9 +108,12 @@ const [productForm, setProductForm] = useState({
     description: "",
     image_url: "",
     offer: "",
+    is_featured: false,
   });
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
+  const [productVideos, setProductVideos] = useState([]);
+  const [videoPreviews, setVideoPreviews] = useState([]);
   const getEntityId = (entity) => entity?.id || entity?._id || "";
   const productCategories = [...new Set([
     ...DEFAULT_PRODUCT_CATEGORIES,
@@ -88,8 +123,10 @@ const [productForm, setProductForm] = useState({
   const closeProductModal = () => {
     setShowProductModal(false);
     setEditingProduct(null);
-    setSelectedImage(null);
-    setImagePreview(null);
+    setSelectedImages([]);
+    setImagePreviews([]);
+    setProductVideos([]);
+    setVideoPreviews([]);
   };
 
   const openCarouselEditor = () => {
@@ -115,10 +152,9 @@ const [productForm, setProductForm] = useState({
 
   const saveCarouselChanges = async () => {
     const token = localStorage.getItem("adminToken");
-    const normalized = [...Array(5)].map((_, index) => {
-      const slide = carouselForm[index] || {};
+    const normalized = carouselForm.map((slide, index) => {
       return {
-        id: index + 1,
+        id: slide.id || index + 1,
         title: (slide.title || `Slide ${index + 1}`).trim(),
         url: (slide.url || "").trim()
       };
@@ -177,6 +213,199 @@ const [productForm, setProductForm] = useState({
     } catch (error) {
       console.error("Error resetting carousel:", error);
       alert(error.message || "Failed to reset carousel");
+    }
+  };
+
+  const openCouponEditor = (coupon = null) => {
+    setEditingCoupon(coupon);
+    setCouponForm({
+      code: coupon?.code || "",
+      discount_type: coupon?.discount_type || "percentage",
+      discount_value: coupon?.discount_value?.toString() || "",
+      min_order_value: coupon?.min_order_value?.toString() || "0",
+      max_discount: coupon?.max_discount?.toString() || "0",
+      applicable_product_id: coupon?.applicable_product_id?._id || coupon?.applicable_product_id || "",
+      is_active: coupon?.is_active !== false,
+      target_audience: coupon?.target_audience || "all",
+      allowed_user_ids: Array.isArray(coupon?.allowed_user_ids) ? coupon.allowed_user_ids.join(", ") : "",
+      usage_limit: coupon?.usage_limit?.toString() || "0",
+      usage_limit_per_user: coupon?.usage_limit_per_user?.toString() || "1"
+    });
+    setShowCouponModal(true);
+  };
+
+  const closeCouponModal = () => {
+    setShowCouponModal(false);
+    setEditingCoupon(null);
+  };
+
+  const handleSaveCoupon = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("adminToken");
+    const url = editingCoupon
+      ? `${API_BASE_URL}/admin/coupons/${editingCoupon._id || editingCoupon.id}`
+      : `${API_BASE_URL}/admin/coupons`;
+    const method = editingCoupon ? "PUT" : "POST";
+
+    const allowedUserIdsArray = couponForm.target_audience === "specific_users"
+      ? couponForm.allowed_user_ids.split(",").map(id => id.trim()).filter(Boolean)
+      : [];
+
+    const body = {
+      code: couponForm.code.trim(),
+      discount_type: couponForm.discount_type,
+      discount_value: Number(couponForm.discount_value),
+      min_order_value: Number(couponForm.min_order_value) || 0,
+      max_discount: Number(couponForm.max_discount) || 0,
+      is_active: couponForm.is_active,
+      target_audience: couponForm.target_audience,
+      allowed_user_ids: allowedUserIdsArray,
+      usage_limit: Number(couponForm.usage_limit) || 0,
+      usage_limit_per_user: Number(couponForm.usage_limit_per_user) || 1
+    };
+
+    if (couponForm.applicable_product_id) {
+      body.applicable_product_id = couponForm.applicable_product_id;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        alert(editingCoupon ? "Coupon updated!" : "Coupon created!");
+        closeCouponModal();
+        fetchData(token);
+      } else {
+        alert(data.message || "Error saving coupon");
+      }
+    } catch (err) {
+      alert("Error saving coupon");
+    }
+  };
+
+  const handleDeleteCoupon = async (couponId) => {
+    if (!window.confirm("Are you sure you want to delete this coupon?")) return;
+    const token = localStorage.getItem("adminToken");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/coupons/${couponId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert("Coupon deleted!");
+        fetchData(token);
+      } else {
+        alert(data.message || "Error deleting coupon");
+      }
+    } catch (err) {
+      alert("Error deleting coupon");
+    }
+  };
+
+  const handleCouponAccessChange = async (userId, shouldLock) => {
+    const token = localStorage.getItem("adminToken");
+    const action = shouldLock ? "lock" : "unlock";
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/coupon-locks/${userId}/${action}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setUsers((prev) => prev.map((user) =>
+          (user.id || user._id) === userId ? { ...user, coupon_locked: shouldLock } : user
+        ));
+      } else {
+        alert(data.message || "Failed to update coupon access");
+      }
+    } catch (err) {
+      alert("Failed to update coupon access");
+    }
+  };
+
+  const openAdEditor = (ad = null) => {
+    setEditingAd(ad);
+    setAdForm({
+      title: ad?.title || "",
+      message: ad?.message || "",
+      image_url: ad?.image_url || "",
+      link_url: ad?.link_url || "",
+      button_text: ad?.button_text || "Shop Now",
+      display_type: ad?.display_type || "banner",
+      is_active: ad?.is_active !== false,
+      priority: ad?.priority?.toString() || "0",
+      start_date: ad?.start_date ? new Date(ad.start_date).toISOString().slice(0, 16) : "",
+      end_date: ad?.end_date ? new Date(ad.end_date).toISOString().slice(0, 16) : "",
+      target_audience: ad?.target_audience || "all"
+    });
+    setShowAdModal(true);
+  };
+
+  const closeAdModal = () => {
+    setShowAdModal(false);
+    setEditingAd(null);
+  };
+
+  const handleSaveAd = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("adminToken");
+    const url = editingAd
+      ? `${API_BASE_URL}/admin/ads/${editingAd._id || editingAd.id}`
+      : `${API_BASE_URL}/admin/ads`;
+    const method = editingAd ? "PUT" : "POST";
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(adForm)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        alert(editingAd ? "Ad updated!" : "Ad created!");
+        closeAdModal();
+        fetchData(token);
+      } else {
+        alert(data.message || "Error saving ad");
+      }
+    } catch (err) {
+      alert("Error saving ad");
+    }
+  };
+
+  const handleDeleteAd = async (adId) => {
+    if (!window.confirm("Are you sure you want to delete this ad?")) return;
+    const token = localStorage.getItem("adminToken");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/ads/${adId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert("Ad deleted!");
+        fetchData(token);
+      } else {
+        alert(data.message || "Error deleting ad");
+      }
+    } catch (err) {
+      alert("Error deleting ad");
     }
   };
 
@@ -320,13 +549,10 @@ const [productForm, setProductForm] = useState({
       }));
 
       try {
-        console.log("Fetching users with token:", token ? "yes" : "no");
         const usersRes = await fetch(`${API_BASE_URL}/admin/users`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const usersData = await usersRes.json();
-        console.log("Users response status:", usersRes.status);
-        console.log("Users data:", JSON.stringify(usersData));
         if (usersData.success) {
           const nonAdminUsers = (usersData.data || []).filter((user) => user.role !== "admin");
           setUsers(nonAdminUsers);
@@ -335,7 +561,6 @@ const [productForm, setProductForm] = useState({
             totalUsers: nonAdminUsers.length
           }));
         } else {
-          console.log("Users fetch failed:", usersData.message);
           setUsers([]);
           setStats(prev => ({
             ...prev,
@@ -349,6 +574,34 @@ const [productForm, setProductForm] = useState({
           ...prev,
           totalUsers: 0
         }));
+      }
+
+      try {
+        const couponsRes = await fetch(`${API_BASE_URL}/admin/coupons`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const couponsData = await couponsRes.json();
+        if (couponsData.success) {
+          setCoupons(couponsData.data || []);
+          setStats(prev => ({
+            ...prev,
+            totalCoupons: (couponsData.data || []).filter(c => c.is_active).length
+          }));
+        }
+      } catch (e) {
+        console.error("Error fetching coupons:", e);
+      }
+
+      try {
+        const adsRes = await fetch(`${API_BASE_URL}/admin/ads`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const adsData = await adsRes.json();
+        if (adsData.success) {
+          setAds(adsData.data || []);
+        }
+      } catch (e) {
+        console.error("Error fetching ads:", e);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -461,9 +714,12 @@ const handleAddProduct = () => {
       description: "",
       image_url: "",
       offer: "",
+      is_featured: false,
     });
-    setSelectedImage(null);
-    setImagePreview(null);
+    setSelectedImages([]);
+    setImagePreviews([]);
+    setProductVideos([]);
+    setVideoPreviews([]);
     setShowProductModal(true);
   };
 
@@ -479,41 +735,63 @@ const handleEditProduct = (product) => {
       description: product.description || "",
       image_url: product.image_url || product.image || "",
       offer: product.offer || "",
+      is_featured: product.is_featured === true,
     });
-    setSelectedImage(null);
-    setImagePreview(product.image_url || product.image || "");
+    const images = product.images && Array.isArray(product.images) && product.images.length > 0
+      ? product.images
+      : (product.image_url || product.image ? [product.image_url || product.image] : []);
+    const videos = product.videos && Array.isArray(product.videos) && product.videos.length > 0
+      ? product.videos
+      : [];
+    setSelectedImages([]);
+    setImagePreviews(images);
+    setProductVideos([]);
+    setVideoPreviews(videos);
     setShowProductModal(true);
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedImage(file);
-      // Create preview URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
+    const file = e.target.files;
+    if (file && file.length > 0) {
+      setSelectedImages((prev) => [...prev, ...Array.from(file)]);
+      const newPreviews = Array.from(file).map((f) => URL.createObjectURL(f));
+      setImagePreviews((prev) => [...prev, ...newPreviews]);
     }
   };
 
   const handleImageUrlChange = (value) => {
-    setSelectedImage(null);
     setProductForm((prev) => ({ ...prev, image_url: value }));
-    setImagePreview(value);
   };
 
-const handleSaveProduct = async (e) => {
+  const handleRemoveImage = (index) => {
+    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleVideoChange = (e) => {
+    const file = e.target.files;
+    if (file && file.length > 0) {
+      setProductVideos((prev) => [...prev, ...Array.from(file)]);
+      const newPreviews = Array.from(file).map((f) => URL.createObjectURL(f));
+      setVideoPreviews((prev) => [...prev, ...newPreviews]);
+    }
+  };
+
+  const handleRemoveVideo = (index) => {
+    setProductVideos((prev) => prev.filter((_, i) => i !== index));
+    setVideoPreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveProduct = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("adminToken");
     const editingProductId = getEntityId(editingProduct);
-    
+
     if (editingProduct && !editingProductId) {
       alert("Cannot edit this product because its ID is missing.");
       return;
     }
-    
+
     const url = editingProduct
       ? `${API_BASE_URL}/admin/products/${editingProductId}`
       : `${API_BASE_URL}/admin/products`;
@@ -528,17 +806,26 @@ const handleSaveProduct = async (e) => {
     formData.append("stock", productForm.stock);
     formData.append("description", productForm.description.trim());
     formData.append("offer", productForm.offer || "");
+    formData.append("is_featured", productForm.is_featured ? "true" : "false");
     formData.append("image_url", productForm.image_url.trim());
-    
-    if (selectedImage) {
-      formData.append("image", selectedImage);
+
+    if (selectedImages.length > 0) {
+      selectedImages.forEach((img) => {
+        formData.append("images", img);
+      });
+    }
+
+    if (productVideos.length > 0) {
+      productVideos.forEach((video) => {
+        formData.append("videos", video);
+      });
     }
 
     try {
       const response = await fetch(url, {
         method,
         headers: {
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: formData,
       });
@@ -797,6 +1084,17 @@ const handleSaveProduct = async (e) => {
               </div>
             </div>
           </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-4">
+              <div className="bg-gray-100 p-3 rounded-lg">
+                <Tag className="text-gray-600" size={24} />
+              </div>
+              <div>
+                <p className="text-gray-600 text-sm">Active Coupons</p>
+                <p className="text-2xl font-bold text-gray-800">{stats.totalCoupons || 0}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -848,6 +1146,20 @@ const handleSaveProduct = async (e) => {
             >
               <TrendingUp className="inline mr-2" size={20} />
               Carousel
+            </button>
+            <button
+              onClick={() => setActiveTab("coupons")}
+              className={`px-4 sm:px-6 py-4 font-semibold transition shrink-0 ${activeTab === "coupons" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+            >
+              <Tag className="inline mr-2" size={20} />
+              Coupons
+            </button>
+            <button
+              onClick={() => setActiveTab("ads")}
+              className={`px-4 sm:px-6 py-4 font-semibold transition shrink-0 ${activeTab === "ads" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+            >
+              <TrendingUp className="inline mr-2" size={20} />
+              Ads
             </button>
           </div>
         </div>
@@ -902,6 +1214,88 @@ const handleSaveProduct = async (e) => {
                 ))}
                 {products.filter(p => p.stock < 10).length === 0 && (
                   <p className="text-gray-600 text-center py-4">All products are well stocked</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6 md:col-span-2">
+              <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Tag className="text-gray-600" size={24} />
+                  Quick Coupon Manager
+                </h3>
+                <button
+                  onClick={() => openCouponEditor()}
+                  className="w-full sm:w-auto justify-center bg-gray-600 hover:bg-gray-700 text-white px-5 py-3 rounded-lg flex items-center gap-2 transition font-semibold"
+                >
+                  <Plus size={20} />
+                  Create Coupon
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Code</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Type</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Value</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Audience</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Usage</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Status</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {coupons.slice(0, 5).map((coupon) => (
+                      <tr key={coupon._id || coupon.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 font-semibold">{coupon.code}</td>
+                        <td className="px-6 py-4 text-gray-600 capitalize">{coupon.discount_type}</td>
+                        <td className="px-6 py-4 text-gray-600">
+                          {coupon.discount_type === "percentage" ? `${coupon.discount_value}%` : `₹${coupon.discount_value}`}
+                        </td>
+                        <td className="px-6 py-4 text-gray-600 capitalize">{coupon.target_audience?.replace("_", " ") || "All"}</td>
+                        <td className="px-6 py-4 text-gray-600">
+                          {coupon.usage_limit > 0 ? `${coupon.total_used || 0}/${coupon.usage_limit}` : "Unlimited"}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 rounded-full text-sm ${coupon.is_active ? "bg-gray-200 text-gray-800" : "bg-gray-100 text-gray-600"}`}>
+                            {coupon.is_active ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openCouponEditor(coupon)}
+                              className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCoupon(coupon._id || coupon.id)}
+                              className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {coupons.length === 0 && (
+                  <div className="p-8 text-center text-gray-600">
+                    No coupons found. Click "Create Coupon" to add your first one!
+                  </div>
+                )}
+                {coupons.length > 5 && (
+                  <div className="p-4 text-center">
+                    <button
+                      onClick={() => setActiveTab("coupons")}
+                      className="text-gray-600 hover:text-gray-800 font-semibold text-sm"
+                    >
+                      View All Coupons →
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -1053,8 +1447,146 @@ const handleSaveProduct = async (e) => {
                                 >
                                   Save
                                 </button>
-                              </div>
-                            )}
+          </div>
+        )}
+
+        {/* Coupons Tab */}
+        {activeTab === "coupons" && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-4 sm:p-6 border-b flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+              <h3 className="text-xl font-bold text-gray-800">Coupons ({coupons.length})</h3>
+              <button
+                onClick={() => openCouponEditor()}
+                className="w-full sm:w-auto justify-center bg-gray-600 hover:bg-gray-700 text-white px-5 py-3 rounded-lg flex items-center gap-2 transition font-semibold"
+              >
+                <Plus size={20} />
+                Create Coupon
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Code</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Type</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Value</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Audience</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Usage</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {coupons.map((coupon) => (
+                    <tr key={coupon._id || coupon.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 font-semibold">{coupon.code}</td>
+                      <td className="px-6 py-4 text-gray-600 capitalize">{coupon.discount_type}</td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {coupon.discount_type === "percentage" ? `${coupon.discount_value}%` : `₹${coupon.discount_value}`}
+                      </td>
+                      <td className="px-6 py-4 text-gray-600 capitalize">{coupon.target_audience?.replace("_", " ") || "All"}</td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {coupon.usage_limit > 0 ? `${coupon.total_used || 0}/${coupon.usage_limit}` : "Unlimited"}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-sm ${coupon.is_active ? "bg-gray-200 text-gray-800" : "bg-gray-100 text-gray-600"}`}>
+                          {coupon.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openCouponEditor(coupon)}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCoupon(coupon._id || coupon.id)}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {coupons.length === 0 && (
+                <div className="p-8 text-center text-gray-600">
+                  No coupons found. Create your first coupon!
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Ads Tab */}
+        {activeTab === "ads" && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-4 sm:p-6 border-b flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+              <h3 className="text-xl font-bold text-gray-800">Ads / Offers ({ads.length})</h3>
+              <button
+                onClick={() => openAdEditor()}
+                className="w-full sm:w-auto justify-center bg-gray-600 hover:bg-gray-700 text-white px-5 py-3 rounded-lg flex items-center gap-2 transition font-semibold"
+              >
+                <Plus size={20} />
+                Create Ad
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Title</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Type</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Audience</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Priority</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {ads.map((ad) => (
+                    <tr key={ad._id || ad.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 font-semibold">{ad.title}</td>
+                      <td className="px-6 py-4 text-gray-600 capitalize">{ad.display_type}</td>
+                      <td className="px-6 py-4 text-gray-600 capitalize">{ad.target_audience?.replace("_", " ") || "All"}</td>
+                      <td className="px-6 py-4 text-gray-600">{ad.priority || 0}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-sm ${ad.is_active ? "bg-gray-200 text-gray-800" : "bg-gray-100 text-gray-600"}`}>
+                          {ad.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openAdEditor(ad)}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAd(ad._id || ad.id)}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {ads.length === 0 && (
+                <div className="p-8 text-center text-gray-600">
+                  No ads found. Create your first ad!
+                </div>
+              )}
+            </div>
+          </div>
+        )}
                           </div>
                           <button
                             onClick={() => handleDeleteOrder(order.id || order._id)}
@@ -1095,6 +1627,7 @@ const handleSaveProduct = async (e) => {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">ZIP</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Country</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Role</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Coupon Access</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Orders</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Joined</th>
                   </tr>
@@ -1115,6 +1648,20 @@ const handleSaveProduct = async (e) => {
                         <span className={`px-3 py-1 rounded-full text-sm ${user.role === "admin" ? "bg-gray-800 text-white" : "bg-gray-200 text-gray-700"}`}>
                           {user.role}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-3 py-1 rounded-full text-sm ${user.coupon_locked ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                            {user.coupon_locked ? "Blocked" : "Allowed"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCouponAccessChange(user.id || user._id, !user.coupon_locked)}
+                            className="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold"
+                          >
+                            {user.coupon_locked ? "Allow" : "Block"}
+                          </button>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-gray-600">
                         {user.orderCount || 0}
@@ -1151,12 +1698,19 @@ const handleSaveProduct = async (e) => {
               <div className="space-y-4">
                 <p className="text-gray-600">Edit slide titles, paste image URLs, or upload image files for each slide.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <div key={i} className="border rounded-lg p-4">
+                  {carouselForm.map((slide, i) => (
+                    <div key={i} className="border rounded-lg p-4 relative">
+                      <button 
+                        onClick={() => setCarouselForm(carouselForm.filter((_, index) => index !== i))}
+                        className="absolute top-2 right-2 text-red-500 hover:text-red-700"
+                        title="Remove Slide"
+                      >
+                        <X size={20} />
+                      </button>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Slide {i + 1}</label>
-                      {carouselForm[i]?.url && (
+                      {slide.url && (
                         <img 
-                          src={carouselForm[i].url} 
+                          src={slide.url} 
                           alt={`Slide ${i+1}`}
                           className="w-full h-24 object-cover rounded mb-2"
                           onError={(e) => e.target.style.display = 'none'}
@@ -1164,14 +1718,14 @@ const handleSaveProduct = async (e) => {
                       )}
                       <input
                         type="text"
-                        value={carouselForm[i]?.title || ""}
+                        value={slide.title || ""}
                         onChange={(e) => handleCarouselFieldChange(i, "title", e.target.value)}
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500 mb-2"
                         placeholder="Enter title"
                       />
                       <input
                         type="text"
-                        value={carouselForm[i]?.url || ""}
+                        value={slide.url || ""}
                         onChange={(e) => handleCarouselFieldChange(i, "url", e.target.value)}
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500 mb-2"
                         placeholder="Paste image URL or /images/file.jpg"
@@ -1188,6 +1742,13 @@ const handleSaveProduct = async (e) => {
                       </label>
                     </div>
                   ))}
+                  
+                  <div className="border rounded-lg p-4 flex items-center justify-center border-dashed bg-gray-50 hover:bg-gray-100 transition cursor-pointer" onClick={() => setCarouselForm([...carouselForm, { id: Date.now(), title: "", url: "" }])}>
+                     <div className="text-center text-gray-500">
+                        <Plus size={32} className="mx-auto mb-2" />
+                        <span className="font-semibold">Add New Slide</span>
+                     </div>
+                  </div>
                 </div>
                 
                 <div className="flex gap-4 mt-6">
@@ -1228,8 +1789,315 @@ const handleSaveProduct = async (e) => {
                 >
                   Edit Carousel
                 </button>
+        </div>
+      )}
+
+      {showCouponModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-800">{editingCoupon ? "Edit Coupon" : "Create Coupon"}</h2>
+              <button onClick={closeCouponModal} className="text-gray-500 hover:text-gray-700">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCoupon} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Coupon Code</label>
+                <input
+                  type="text"
+                  value={couponForm.code}
+                  onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  placeholder="e.g., SAVE20"
+                  required
+                />
               </div>
-            )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Type</label>
+                  <select
+                    value={couponForm.discount_type}
+                    onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  >
+                    <option value="percentage">Percentage</option>
+                    <option value="fixed">Fixed Amount</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Value</label>
+                  <input
+                    type="number"
+                    value={couponForm.discount_value}
+                    onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                    placeholder={couponForm.discount_type === "percentage" ? "e.g., 20" : "e.g., 50"}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Min Order Value (₹)</label>
+                  <input
+                    type="number"
+                    value={couponForm.min_order_value}
+                    onChange={(e) => setCouponForm({ ...couponForm, min_order_value: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Discount (₹)</label>
+                  <input
+                    type="number"
+                    value={couponForm.max_discount}
+                    onChange={(e) => setCouponForm({ ...couponForm, max_discount: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                    placeholder="0 = no limit"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Target Audience</label>
+                <select
+                  value={couponForm.target_audience}
+                  onChange={(e) => setCouponForm({ ...couponForm, target_audience: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                >
+                  <option value="all">All Customers</option>
+                  <option value="new_users_only">New Users Only (First Order)</option>
+                  <option value="specific_users">Specific Users Only</option>
+                </select>
+              </div>
+
+              {couponForm.target_audience === "specific_users" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Allowed User IDs (comma separated)</label>
+                  <input
+                    type="text"
+                    value={couponForm.allowed_user_ids}
+                    onChange={(e) => setCouponForm({ ...couponForm, allowed_user_ids: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                    placeholder="user_id_1, user_id_2"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Enter MongoDB User IDs separated by commas</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Usage Limit</label>
+                  <input
+                    type="number"
+                    value={couponForm.usage_limit}
+                    onChange={(e) => setCouponForm({ ...couponForm, usage_limit: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                    placeholder="0 = unlimited"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Per User Limit</label>
+                  <input
+                    type="number"
+                    value={couponForm.usage_limit_per_user}
+                    onChange={(e) => setCouponForm({ ...couponForm, usage_limit_per_user: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                    placeholder="1"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="coupon_active"
+                  checked={couponForm.is_active}
+                  onChange={(e) => setCouponForm({ ...couponForm, is_active: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                />
+                <label htmlFor="coupon_active" className="text-sm font-medium text-gray-700">Active</label>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={closeCouponModal}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700"
+                >
+                  {editingCoupon ? "Update" : "Create"} Coupon
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAdModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-800">{editingAd ? "Edit Ad" : "Create Ad"}</h2>
+              <button onClick={closeAdModal} className="text-gray-500 hover:text-gray-700">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAd} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                <input
+                  type="text"
+                  value={adForm.title}
+                  onChange={(e) => setAdForm({ ...adForm, title: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <textarea
+                  value={adForm.message}
+                  onChange={(e) => setAdForm({ ...adForm, message: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  rows="3"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Display Type</label>
+                <select
+                  value={adForm.display_type}
+                  onChange={(e) => setAdForm({ ...adForm, display_type: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                >
+                  <option value="banner">Banner</option>
+                  <option value="modal">Modal Popup</option>
+                  <option value="toast">Toast Notification</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Image URL (optional)</label>
+                  <input
+                    type="text"
+                    value={adForm.image_url}
+                    onChange={(e) => setAdForm({ ...adForm, image_url: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                    placeholder="/images/ad.jpg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Link URL (optional)</label>
+                  <input
+                    type="text"
+                    value={adForm.link_url}
+                    onChange={(e) => setAdForm({ ...adForm, link_url: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                    placeholder="/products"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Button Text</label>
+                <input
+                  type="text"
+                  value={adForm.button_text}
+                  onChange={(e) => setAdForm({ ...adForm, button_text: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date (optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={adForm.start_date}
+                    onChange={(e) => setAdForm({ ...adForm, start_date: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date (optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={adForm.end_date}
+                    onChange={(e) => setAdForm({ ...adForm, end_date: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                  <input
+                    type="number"
+                    value={adForm.priority}
+                    onChange={(e) => setAdForm({ ...adForm, priority: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Target Audience</label>
+                  <select
+                    value={adForm.target_audience}
+                    onChange={(e) => setAdForm({ ...adForm, target_audience: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                  >
+                    <option value="all">All</option>
+                    <option value="new_users">New Users</option>
+                    <option value="returning">Returning</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="ad_active"
+                  checked={adForm.is_active}
+                  onChange={(e) => setAdForm({ ...adForm, is_active: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                />
+                <label htmlFor="ad_active" className="text-sm font-medium text-gray-700">Active</label>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={closeAdModal}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700"
+                >
+                  {editingAd ? "Update" : "Create"} Ad
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
           </div>
         )}
 </div>
@@ -1336,15 +2204,29 @@ const handleSaveProduct = async (e) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                  <input
+                    type="checkbox"
+                    checked={productForm.is_featured || false}
+                    onChange={(e) => setProductForm((prev) => ({ ...prev, is_featured: e.target.checked }))}
+                    className="w-4 h-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                  />
+                  Featured on Home Page
+                </label>
+                <p className="text-xs text-gray-500">Enable to show this product in the featured/highlight section on the home page.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Images</label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
                   <div className="flex items-center justify-center mb-4">
                     <label className="cursor-pointer flex flex-col items-center">
                       <Upload className="text-gray-400 mb-2" size={32} />
-                      <span className="text-sm text-gray-600">Click to upload image</span>
+                      <span className="text-sm text-gray-600">Click to upload multiple images</span>
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
                         onChange={handleImageChange}
                         className="hidden"
                       />
@@ -1355,29 +2237,66 @@ const handleSaveProduct = async (e) => {
                     type="text"
                     value={productForm.image_url}
                     onChange={(e) => handleImageUrlChange(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
-                    placeholder="Enter image URL (e.g., /images/SHOE1.jpg)"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500 mb-3"
+                    placeholder="Paste image URL (e.g., /images/SHOE1.jpg)"
                   />
 
-                  {imagePreview && (
-                    <div className="mt-4">
-                      <img src={resolveImageUrl(imagePreview)} alt="Preview" className="max-h-32 mx-auto rounded-lg" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedImage(null);
-                          setImagePreview("");
-                          setProductForm((prev) => ({ ...prev, image_url: "" }));
-                        }}
-                        className="mt-2 text-red-500 text-sm"
-                      >
-                        Remove
-                      </button>
+                  {imagePreviews.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                      {imagePreviews.map((src, idx) => (
+                        <div key={idx} className="relative border rounded-lg overflow-hidden bg-gray-50">
+                          <img src={resolveImageUrl(src)} alt={`Preview ${idx + 1}`} className="w-full h-24 object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage(idx)}
+                            className="absolute top-1 right-1 bg-gray-800 text-white rounded-full p-1"
+                          >
+                            <X size={14} />
+                          </button>
+                          {idx === 0 && <span className="absolute bottom-1 left-1 bg-gray-700 text-white text-xs px-2 py-0.5 rounded">Main</span>}
+                        </div>
+                      ))}
                     </div>
                   )}
-
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Upload a file or enter a URL</p>
+                <p className="text-xs text-gray-500 mt-1">First image will be used as the main product image.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Videos (optional)</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                  <div className="flex items-center justify-center mb-4">
+                    <label className="cursor-pointer flex flex-col items-center">
+                      <Upload className="text-gray-400 mb-2" size={32} />
+                      <span className="text-sm text-gray-600">Click to upload videos</span>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        multiple
+                        onChange={handleVideoChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  {videoPreviews.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                      {videoPreviews.map((src, idx) => (
+                        <div key={idx} className="relative border rounded-lg overflow-hidden bg-black">
+                          <video src={src} controls className="w-full h-32 object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveVideo(idx)}
+                            className="absolute top-1 right-1 bg-gray-800 text-white rounded-full p-1 z-10"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Videos will appear as slides alongside images in the product details.</p>
               </div>
 
               <div className="flex gap-4 pt-4">

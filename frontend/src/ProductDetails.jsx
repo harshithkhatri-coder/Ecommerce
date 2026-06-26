@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Plus, Minus, ShoppingCart, CreditCard, Heart } from "lucide-react";
+import { ArrowLeft, Plus, Minus, ShoppingCart, CreditCard, Heart, X, ChevronLeft, ChevronRight, Play } from "lucide-react";
 import API_BASE_URL from "./config";
 import { productsData } from "./productsData";
 import { resolveImageUrl } from "./imageHelpers";
 
-export default function ProductDetails({ productId, onPageChange, onAddToCart }) {
+export default function ProductDetails({ productId, onPageChange, onAddToCart, user }) {
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState("9");
@@ -14,6 +14,14 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
   const [contactMessage, setContactMessage] = useState('');
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [relatedProducts, setRelatedProducts] = useState([]);
+  const [couponLocked, setCouponLocked] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -80,6 +88,36 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart })
     }
   }, [productId]);
 
+  useEffect(() => {
+    if (!productId) return;
+    let isMounted = true;
+
+    const fetchRelatedProducts = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/products`);
+      const data = await response.json();
+      if (isMounted && data.success && Array.isArray(data.data)) {
+        const currentProduct = productsData.find(
+          p => (p._id === productId) || (p.id === productId) || (String(p.id) === String(productId))
+        );
+        const currentCategory = currentProduct?.category || product?.category;
+        const filtered = data.data
+          .filter(p => p._id !== productId && p.category === currentCategory)
+          .slice(0, 4);
+        setRelatedProducts(filtered);
+      }
+    } catch (error) {
+      console.error('Error fetching related products:', error);
+    }
+  };
+
+    fetchRelatedProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [productId, product?.category]);
+
   if (loading) {
     return (
       <div className="min-h-full bg-gradient-to-b from-gray-50 via-gray-100 to-white flex items-center justify-center">
@@ -132,7 +170,7 @@ const handleAddToCart = () => {
     alert(`Added ${quantity} item(s) to cart!`);
   };
 
-const handleBuyNow = () => {
+const handleBuyNowWithCoupon = async () => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (!user) {
       alert("Please login to place an order");
@@ -151,7 +189,79 @@ const handleBuyNow = () => {
     for (let i = 0; i < quantity; i++) {
       onAddToCart(product, { silent: true });
     }
+
+    if (appliedCoupon) {
+      localStorage.setItem('appliedCoupon', JSON.stringify(appliedCoupon));
+    }
     onPageChange("Cart");
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponError("");
+    try {
+      const subtotal = product.price * quantity;
+      const user = JSON.parse(localStorage.getItem("user"));
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/coupons/validate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          subtotal,
+          cartItems: [{
+            product_id: product._id || product.id,
+            name: product.name,
+            price: product.price,
+            quantity
+          }],
+          userId: user?.id || user?._id
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAppliedCoupon(data.data);
+        setCouponError("");
+      } else {
+        setCouponError(data.message || "Invalid coupon");
+        setAppliedCoupon(null);
+        if (data.coupon_locked) {
+          setCouponLocked(true);
+        }
+      }
+    } catch {
+      setCouponError("Failed to validate coupon");
+    }
+    setCouponLoading(false);
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
+  };
+
+  const handleBuyNow = () => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    if (!user) {
+      alert("Please login to place an order");
+      onPageChange("Login");
+      return;
+    }
+
+    const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
+    const currentTotalItems = currentCart.reduce((sum, item) => sum + (item.quantity || 1), 0);
+
+    if (currentTotalItems + quantity > MAX_ITEMS) {
+      alert(`You can only add up to ${MAX_ITEMS} items total. Please reduce the quantity or checkout with fewer items.`);
+      return;
+    }
+
+    setShowCouponModal(true);
   };
 
   const incrementQuantity = () => {
@@ -251,28 +361,122 @@ const handleBuyNow = () => {
         {/* Row 1: Image and Product Info side by side */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Product Image Container */}
-          <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 flex items-center justify-center min-h-64 md:min-h-96">
-            <div className="relative w-full h-full flex items-center justify-center">
-              <img
-                src={resolveImageUrl(product.image_url || product.image)}
-                alt={product.name}
-                onError={(e) => {
-                  if (product.image && e.currentTarget.src !== product.image) {
-                    e.currentTarget.src = product.image;
-                  }
-                }}
-                className="max-w-full max-h-96 object-contain rounded-lg shadow-md hover:shadow-xl transition transform hover:scale-105"
-              />
-              <button
-                onClick={handleToggleWishlist}
-                 className={`absolute top-4 right-4 p-3 rounded-full transition ${isInWishlist
-                   ? "bg-gray-500 text-white"
-                   : "bg-white/80 text-gray-800 hover:bg-white"
-                   }`}
-              >
-                <Heart size={24} fill={isInWishlist ? "currentColor" : "none"} />
-              </button>
-            </div>
+          <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 min-h-64 md:min-h-96">
+            {(() => {
+              const images = Array.isArray(product.images) ? product.images : (product.image_url || product.image ? [product.image_url || product.image] : []);
+              const videos = Array.isArray(product.videos) ? product.videos : [];
+              const productMedia = [...images, ...videos];
+              const validMedia = productMedia.filter(Boolean);
+
+              if (validMedia.length === 0) {
+                return (
+                  <div className="relative w-full h-full flex items-center justify-center">
+                    <div className="text-gray-400">No media available</div>
+                  </div>
+                );
+              }
+
+              const safeIndex = Math.min(activeImageIndex, validMedia.length - 1);
+              const currentSrc = validMedia[safeIndex] || validMedia[0];
+              const isVideo = typeof currentSrc === 'string' && (
+                currentSrc.endsWith('.mp4') ||
+                currentSrc.endsWith('.webm') ||
+                currentSrc.endsWith('.mov') ||
+                currentSrc.includes('video')
+              );
+
+              return (
+                <div className="relative">
+                  <div className="relative h-64 md:h-96 flex items-center justify-center overflow-hidden rounded-lg">
+                    {isVideo ? (
+                      <video
+                        src={resolveImageUrl(currentSrc)}
+                        controls
+                        className="max-w-full max-h-96 object-contain rounded-lg shadow-md"
+                        onError={(e) => {
+                          if (safeIndex > 0) {
+                            setActiveImageIndex(0);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src={resolveImageUrl(currentSrc)}
+                        alt={product.name}
+                        onError={(e) => {
+                          if (safeIndex > 0) {
+                            setActiveImageIndex(0);
+                          }
+                        }}
+                        className="max-w-full max-h-96 object-contain rounded-lg shadow-md hover:shadow-xl transition transform hover:scale-105"
+                      />
+                    )}
+                  </div>
+
+                  {validMedia.length > 1 && (
+                    <>
+                      <button
+                        onClick={() => setActiveImageIndex((prev) => (prev === 0 ? validMedia.length - 1 : prev - 1))}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 p-2 rounded-full shadow-md transition"
+                      >
+                        <ChevronLeft size={24} />
+                      </button>
+                      <button
+                        onClick={() => setActiveImageIndex((prev) => (prev === validMedia.length - 1 ? 0 : prev + 1))}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 p-2 rounded-full shadow-md transition"
+                      >
+                        <ChevronRight size={24} />
+                      </button>
+
+                      <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
+                        {validMedia.map((media, idx) => {
+                          const isMediaVideo = typeof media === 'string' && (
+                            media.endsWith('.mp4') ||
+                            media.endsWith('.webm') ||
+                            media.endsWith('.mov') ||
+                            media.includes('video')
+                          );
+                          return (
+                            <button
+                              key={idx}
+                              onClick={() => setActiveImageIndex(idx)}
+                              className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
+                                safeIndex === idx ? "border-gray-600" : "border-gray-200"
+                              }`}
+                            >
+                              {isMediaVideo ? (
+                                <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                                  <Play size={20} className="text-gray-600" />
+                                </div>
+                              ) : (
+                                <img
+                                  src={resolveImageUrl(media)}
+                                  alt={`${product.name} ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                  }}
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  <button
+                    onClick={handleToggleWishlist}
+                    className={`absolute top-4 right-4 p-3 rounded-full transition z-10 ${isInWishlist
+                      ? "bg-gray-500 text-white"
+                      : "bg-white/80 text-gray-800 hover:bg-white"
+                      }`}
+                  >
+                    <Heart size={24} fill={isInWishlist ? "currentColor" : "none"} />
+                  </button>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Product Details Container */}
@@ -531,10 +735,121 @@ const handleBuyNow = () => {
                   </button>
                 </div>
               </form>
-            )}
+        )}
+      </div>
+
+      {/* Related Products */}
+      {relatedProducts.length > 0 && (
+        <div className="max-w-6xl mx-auto px-4 py-12">
+          <h2 className="text-3xl font-bold text-white mb-8">You May Also Like</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {relatedProducts.map((rp) => (
+              <button
+                key={rp._id || rp.id}
+                type="button"
+                onClick={() => onPageChange("ProductDetails", rp._id || rp.id)}
+                className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition transform hover:-translate-y-1 text-left"
+              >
+                <div className="relative h-48 overflow-hidden">
+                  <img
+                    src={resolveImageUrl(rp.image_url || rp.image || rp.images?.[0])}
+                    alt={rp.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute top-2 right-2 bg-gray-600 text-white px-2 py-1 rounded text-xs font-semibold">
+                    {rp.category}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-1 truncate">{rp.name}</h3>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-xl font-bold text-gray-800">₹{rp.price}</p>
+                    {rp.offer && (
+                      <span className="bg-gray-600 text-white px-2 py-0.5 rounded text-xs font-semibold">
+                        {rp.offer}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+    </div>
+
+    {showCouponModal && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg w-full max-w-md p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-gray-800">Apply Coupon</h3>
+            <button onClick={() => setShowCouponModal(false)} className="text-gray-500 hover:text-gray-700">
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="mb-4">
+            <p className="text-gray-600 mb-2">Product: <strong>{product.name}</strong></p>
+            <p className="text-gray-600 mb-2">Total: <strong>₹{product.price * quantity}</strong></p>
+          </div>
+
+          {appliedCoupon ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-green-700">{appliedCoupon.code}</p>
+                  <p className="text-green-600 text-sm">Discount: -₹{appliedCoupon.discount_amount}</p>
+                </div>
+                <button onClick={removeCoupon} className="text-red-500 hover:text-red-700 text-sm font-semibold">Remove</button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {couponLocked && (
+                <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-3 py-2 rounded-lg text-sm">
+                  Your coupon access is locked. Please wait for admin permission to use coupons again.
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(""); }}
+                  placeholder="Enter coupon code"
+                  disabled={couponLocked}
+                  className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg text-sm focus:border-gray-400 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500"
+                />
+                <button
+                  onClick={handleApplyCoupon}
+                  disabled={couponLoading || !couponCode.trim() || couponLocked}
+                  className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition disabled:opacity-50"
+                >
+                  {couponLoading ? "..." : "Apply"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {couponError && <p className="text-red-500 text-xs mb-3">{couponError}</p>}
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowCouponModal(false)}
+              className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition font-semibold"
+            >
+              Skip
+            </button>
+            <button
+              onClick={handleBuyNowWithCoupon}
+              className="flex-1 bg-gray-700 text-white py-2 rounded-lg font-semibold hover:bg-gray-800 transition"
+            >
+              Proceed to Checkout
+            </button>
           </div>
         </div>
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 }

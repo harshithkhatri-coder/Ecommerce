@@ -163,13 +163,13 @@ export default function App() {
   const renderPage = () => {
     switch (currentPage) {
       case "Home":
-        return <Home cart={cart} onAddToCart={addToCart} onPageChange={handlePageChange} />;
+        return <Home cart={cart} onAddToCart={addToCart} onPageChange={handlePageChange} user={user} />;
       case "About":
         return <About />;
       case "Products":
         return <Products onAddToCart={addToCart} onPageChange={handlePageChange} />;
       case "ProductDetails":
-        return <ProductDetails productId={selectedProductId} onPageChange={handlePageChange} onAddToCart={addToCart} />;
+        return <ProductDetails productId={selectedProductId} onPageChange={handlePageChange} onAddToCart={addToCart} user={user} />;
       case "Cart":
         return <Cart cart={cart} setCart={setCart} onRemoveFromCart={removeFromCart} onPageChange={handlePageChange} user={user} />;
       case "Login":
@@ -201,7 +201,7 @@ export default function App() {
           </div>
         );
       default:
-        return <Home cart={cart} onAddToCart={addToCart} onPageChange={handlePageChange} />;
+        return <Home cart={cart} onAddToCart={addToCart} onPageChange={handlePageChange} user={user} />;
     }
   };
 

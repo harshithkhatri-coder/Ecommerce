@@ -43,9 +43,10 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // Static
 app.use('/images', express.static(path.join(__dirname, 'public/images')));
@@ -89,6 +90,9 @@ const productSchema = new mongoose.Schema({
   stock: Number,
   description: String,
   image_url: String,
+  images: [String],
+  videos: [String],
+  is_featured: { type: Boolean, default: false },
   offer: { type: String, default: "" }
 });
 const Product = mongoose.model("Product", productSchema);
@@ -130,6 +134,59 @@ const carouselSchema = new mongoose.Schema(
 );
 const CarouselConfig = mongoose.model("CarouselConfig", carouselSchema);
 
+const couponSchema = new mongoose.Schema({
+  code: { type: String, required: true, unique: true },
+  discount_type: { type: String, enum: ["percentage", "fixed"], required: true },
+  discount_value: { type: Number, required: true },
+  min_order_value: { type: Number, default: 0 },
+  max_discount: { type: Number, default: 0 },
+  applicable_product_id: { type: mongoose.Schema.Types.ObjectId, ref: "Product", default: null },
+  is_active: { type: Boolean, default: true },
+  created_at: { type: Date, default: Date.now },
+  target_audience: { type: String, enum: ["all", "new_users_only", "specific_users"], default: "all" },
+  allowed_user_ids: [{ type: String }],
+  usage_limit: { type: Number, default: 0 },
+  usage_limit_per_user: { type: Number, default: 1 },
+  total_used: { type: Number, default: 0 }
+});
+const Coupon = mongoose.model("Coupon", couponSchema);
+
+const couponUsageSchema = new mongoose.Schema({
+  coupon_id: { type: String, required: true },
+  user_id: { type: String, required: true },
+  used_at: { type: Date, default: Date.now }
+});
+const CouponUsage = mongoose.model("CouponUsage", couponUsageSchema);
+
+const couponLockSchema = new mongoose.Schema({
+  user_id: { type: String, required: true, unique: true },
+  locked: { type: Boolean, default: false },
+  last_coupon_used: { type: String, default: "" },
+  locked_at: { type: Date, default: null }
+});
+const CouponLock = mongoose.model("CouponLock", couponLockSchema);
+
+const adSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  image_url: { type: String, default: "" },
+  link_url: { type: String, default: "" },
+  button_text: { type: String, default: "Shop Now" },
+  display_type: { type: String, enum: ["banner", "modal", "toast"], default: "banner" },
+  is_active: { type: Boolean, default: true },
+  priority: { type: Number, default: 0 },
+  start_date: { type: Date, default: null },
+  end_date: { type: Date, default: null },
+  target_audience: { type: String, enum: ["all", "new_users", "returning"], default: "all" }
+}, { timestamps: true });
+const Ad = mongoose.model("Ad", adSchema);
+
+const DEFAULT_COUPONS = [
+  { code: "WELCOME10", discount_type: "percentage", discount_value: 10, min_order_value: 0, max_discount: 0, is_active: true, target_audience: "new_users_only", usage_limit_per_user: 1 },
+  { code: "SAVE20", discount_type: "percentage", discount_value: 20, min_order_value: 500, max_discount: 200, is_active: true, target_audience: "all", usage_limit_per_user: 1 },
+  { code: "FLAT50", discount_type: "fixed", discount_value: 50, min_order_value: 300, max_discount: 0, is_active: true, target_audience: "all", usage_limit_per_user: 1 }
+];
+
 const DEFAULT_CAROUSEL_SLIDES = [
   { id: 1, url: "/images/SHOE1.jpg", title: "BRANDED SHOES" },
   { id: 2, url: "/images/WhatsApp Image 2026-01-13 at 7.57.38 PM.jpeg", title: "Premium Collection" },
@@ -151,6 +208,130 @@ const serializeUser = (user, token) => ({
   role: getEffectiveRole(user),
   token
 });
+
+async function getAuthenticatedUser(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return await User.findById(decoded.id);
+  } catch {
+    return null;
+  }
+}
+
+function serializeCoupon(coupon, discountAmount) {
+  return {
+    id: coupon._id,
+    code: coupon.code,
+    discount_type: coupon.discount_type,
+    discount_value: coupon.discount_value,
+    discount_amount: discountAmount,
+    min_order_value: coupon.min_order_value,
+    max_discount: coupon.max_discount,
+    target_audience: coupon.target_audience,
+    usage_limit: coupon.usage_limit,
+    usage_limit_per_user: coupon.usage_limit_per_user,
+    total_used: coupon.total_used || 0
+  };
+}
+
+async function validateCouponForUser({ code, subtotal, cartItems, userId }) {
+  const normalizedCode = (code || "").trim().toUpperCase();
+  const userIdentifier = String(userId || "").trim();
+  const orderSubtotal = Number(subtotal) || 0;
+
+  if (!normalizedCode) {
+    return { status: 400, body: { success: false, message: "Coupon code is required" } };
+  }
+
+  if (!userIdentifier) {
+    return { status: 401, body: { success: false, message: "Please login to use coupons" } };
+  }
+
+  const coupon = await Coupon.findOne({ code: normalizedCode, is_active: true });
+  if (!coupon) {
+    return { status: 404, body: { success: false, message: "Invalid coupon code" } };
+  }
+
+  if (coupon.applicable_product_id) {
+    if (!Array.isArray(cartItems) || cartItems.length === 0) {
+      return { status: 400, body: { success: false, message: "Cart is empty" } };
+    }
+
+    const hasProduct = cartItems.some(item =>
+      String(item.product_id || item._id || item.id) === String(coupon.applicable_product_id)
+    );
+    if (!hasProduct) {
+      return { status: 400, body: { success: false, message: "This coupon is only applicable for a specific product." } };
+    }
+  }
+
+  const minOrderValue = coupon.min_order_value || 0;
+  if (orderSubtotal < minOrderValue) {
+    return { status: 400, body: { success: false, message: `Minimum order value of ₹${minOrderValue} required` } };
+  }
+
+  if (coupon.target_audience === "new_users_only") {
+    const existingOrders = await Order.countDocuments({ user_id: userIdentifier });
+    if (existingOrders > 0) {
+      return { status: 403, body: { success: false, message: "This coupon is only for new users (first order)." } };
+    }
+  } else if (coupon.target_audience === "specific_users") {
+    const allowedIds = (coupon.allowed_user_ids || []).map(id => String(id).trim()).filter(Boolean);
+    if (allowedIds.length === 0 || !allowedIds.includes(userIdentifier)) {
+      return { status: 403, body: { success: false, message: "You are not eligible for this coupon." } };
+    }
+  }
+
+  if (coupon.usage_limit > 0 && (coupon.total_used || 0) >= coupon.usage_limit) {
+    return { status: 403, body: { success: false, message: "This coupon usage limit has been reached." } };
+  }
+
+  if (coupon.usage_limit_per_user > 0) {
+    const userUsageCount = await CouponUsage.countDocuments({
+      coupon_id: String(coupon._id),
+      user_id: userIdentifier
+    });
+    if (userUsageCount >= coupon.usage_limit_per_user) {
+      return { status: 403, body: { success: false, message: "You have already used this coupon the maximum number of times." } };
+    }
+  }
+
+  const couponLock = await CouponLock.findOne({ user_id: userIdentifier });
+  if (couponLock && couponLock.locked) {
+    return {
+      status: 403,
+      body: {
+        success: false,
+        message: "You have used a coupon recently. Please wait for admin permission to use another coupon.",
+        coupon_locked: true
+      }
+    };
+  }
+
+  let discountAmount = 0;
+  if (coupon.discount_type === "percentage") {
+    discountAmount = Math.round((orderSubtotal * coupon.discount_value) / 100);
+    if (coupon.max_discount && discountAmount > coupon.max_discount) discountAmount = coupon.max_discount;
+  } else {
+    discountAmount = coupon.discount_value;
+  }
+
+  discountAmount = Math.min(discountAmount, orderSubtotal);
+
+  return {
+    status: 200,
+    coupon,
+    discountAmount,
+    body: {
+      success: true,
+      data: serializeCoupon(coupon, discountAmount)
+    }
+  };
+}
 
 async function generateOrderId() {
   for (let i = 0; i < 5; i++) {
@@ -312,6 +493,122 @@ app.post("/api/auth/login", async (req, res) => {
 // ===== TEST =====
 app.get("/api/test", (req, res) => {
   res.json({ success: true, message: "API working!" });
+});
+
+
+// ===== FEATURED & COUPONS (PUBLIC) =====
+app.get("/api/products/featured", async (req, res) => {
+  try {
+    const products = await Product.find({ is_featured: true });
+    res.json({ success: true, data: products });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Failed to fetch featured products" });
+  }
+});
+
+app.get("/api/coupons/active", async (req, res) => {
+  try {
+    const coupons = await Coupon.find({ is_active: true });
+    res.json({ success: true, data: coupons });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to fetch active coupons" });
+  }
+});
+
+app.post("/api/coupons/validate", async (req, res) => {
+  const { code, subtotal, cartItems, userId } = req.body;
+  const normalizedCode = (code || "").trim().toUpperCase();
+
+  if (!normalizedCode) {
+    return res.status(400).json({ success: false, message: "Coupon code is required" });
+  }
+
+  try {
+    const authUser = await getAuthenticatedUser(req);
+    let coupon = await Coupon.findOne({ code: normalizedCode, is_active: true });
+    if (!coupon) return res.status(404).json({ success: false, message: "Invalid coupon code" });
+
+    if (coupon.applicable_product_id) {
+      if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
+        return res.status(400).json({ success: false, message: "Cart is empty" });
+      }
+      const hasProduct = cartItems.some(item =>
+        String(item.product_id || item._id || item.id) === String(coupon.applicable_product_id)
+      );
+      if (!hasProduct) return res.status(400).json({ success: false, message: "This coupon is only applicable for a specific product." });
+    }
+
+    const minOrderValue = coupon.min_order_value || 0;
+    if (subtotal < minOrderValue) return res.status(400).json({ success: false, message: `Minimum order value of ₹${minOrderValue} required` });
+
+    const userIdentifier = String(authUser?._id || userId || "").trim();
+    if (!userIdentifier) {
+      return res.status(401).json({ success: false, message: "Please login to use coupons" });
+    }
+
+    if (coupon.target_audience === "new_users_only") {
+      const existingOrders = await Order.countDocuments({ user_id: userIdentifier });
+      if (existingOrders > 0) {
+        return res.status(403).json({ success: false, message: "This coupon is only for new users (first order)." });
+      }
+    } else if (coupon.target_audience === "specific_users") {
+      const allowedIds = (coupon.allowed_user_ids || []).map(id => String(id).trim()).filter(Boolean);
+      if (allowedIds.length === 0 || !allowedIds.includes(userIdentifier)) {
+        return res.status(403).json({ success: false, message: "You are not eligible for this coupon." });
+      }
+    }
+
+    if (coupon.usage_limit > 0 && (coupon.total_used || 0) >= coupon.usage_limit) {
+      return res.status(403).json({ success: false, message: "This coupon usage limit has been reached." });
+    }
+
+    if (coupon.usage_limit_per_user > 0) {
+      const userUsageCount = await CouponUsage.countDocuments({
+        coupon_id: String(coupon._id),
+        user_id: userIdentifier
+      });
+      if (userUsageCount >= coupon.usage_limit_per_user) {
+        return res.status(403).json({ success: false, message: "You have already used this coupon the maximum number of times." });
+      }
+    }
+
+    const couponLock = await CouponLock.findOne({ user_id: userIdentifier });
+    if (couponLock && couponLock.locked) {
+      return res.status(403).json({
+        success: false,
+        message: "You have used a coupon recently. Please wait for admin permission to use another coupon.",
+        coupon_locked: true
+      });
+    }
+
+    let discountAmount = 0;
+    if (coupon.discount_type === "percentage") {
+      discountAmount = Math.round((subtotal * coupon.discount_value) / 100);
+      if (coupon.max_discount && discountAmount > coupon.max_discount) discountAmount = coupon.max_discount;
+    } else {
+      discountAmount = coupon.discount_value;
+    }
+    discountAmount = Math.min(discountAmount, subtotal);
+
+    res.json({
+      success: true,
+      data: {
+        code: coupon.code,
+        discount_type: coupon.discount_type,
+        discount_value: coupon.discount_value,
+        discount_amount: discountAmount,
+        min_order_value: coupon.min_order_value,
+        max_discount: coupon.max_discount,
+        target_audience: coupon.target_audience,
+        usage_limit: coupon.usage_limit,
+        usage_limit_per_user: coupon.usage_limit_per_user,
+        total_used: coupon.total_used || 0
+      }
+    });
+  } catch (err) {
+    console.error("Coupon validation error:", err);
+    res.status(500).json({ success: false, message: "Failed to validate coupon" });
+  }
 });
 
 // ===== PRODUCTS =====
@@ -476,6 +773,44 @@ app.post("/api/orders", async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    const couponCode = (req.body.coupon_code || "").trim().toUpperCase();
+    if (couponCode) {
+      const validation = await validateCouponForUser({
+        code: couponCode,
+        subtotal: req.body.subtotal || req.body.original_total || total,
+        cartItems: items,
+        userId: user._id
+      });
+
+      if (!validation.body.success) {
+        return res.status(validation.status).json(validation.body);
+      }
+
+      const expectedTax = Math.round(((Number(req.body.subtotal || req.body.original_total || total) || 0) - validation.discountAmount) * 0.18);
+      const expectedTotal = (Number(req.body.subtotal || req.body.original_total || total) || 0) - validation.discountAmount + expectedTax;
+      if (Math.abs(Number(total) - expectedTotal) > 1) {
+        return res.status(400).json({ success: false, message: "Order total does not match coupon discount" });
+      }
+
+      await CouponLock.findOneAndUpdate(
+        { user_id: String(user._id) },
+        {
+          locked: true,
+          last_coupon_used: couponCode,
+          locked_at: new Date()
+        },
+        { upsert: true, new: true }
+      );
+
+      await CouponUsage.create({
+        coupon_id: String(validation.coupon._id),
+        user_id: String(user._id)
+      });
+      await Coupon.findByIdAndUpdate(validation.coupon._id, {
+        $inc: { total_used: 1 }
+      });
+    }
+
     const orderId = await generateOrderId();
     const order = await Order.create({
       order_id: orderId,
@@ -569,23 +904,45 @@ app.get("/api/admin/products", adminAuth, async (req, res) => {
   }
 });
 
-app.post("/api/admin/products", adminAuth, upload.single("image"), async (req, res) => {
+app.post("/api/admin/products", adminAuth, (req, res, next) => {
+  const uploadMiddleware = upload.fields([
+    { name: 'images', maxCount: 5 },
+    { name: 'videos', maxCount: 5 }
+  ]);
+  uploadMiddleware(req, res, next);
+}, async (req, res) => {
   try {
-    const { name, price, original_price, category, stock, description, image_url, offer } = req.body;
+    const { name, price, original_price, category, stock, description, image_url, offer, is_featured } = req.body;
     let imageUrl = image_url || "";
-    
-    if (req.file) {
-      imageUrl = "/images/" + req.file.filename;
+    let imagesArr = [];
+    let videosArr = [];
+
+    if (req.files) {
+      if (req.files['images'] && req.files['images'].length > 0) {
+        imagesArr = req.files['images'].map(file => "/images/" + file.filename);
+        imageUrl = imagesArr[0];
+      } else if (image_url) {
+        imagesArr = [image_url];
+      }
+
+      if (req.files['videos'] && req.files['videos'].length > 0) {
+        videosArr = req.files['videos'].map(file => "/images/" + file.filename);
+      }
+    } else if (image_url) {
+      imagesArr = [image_url];
     }
-    
-    const product = await Product.create({ 
-      name, 
-      price: Number(price), 
+
+    const product = await Product.create({
+      name,
+      price: Number(price),
       original_price: original_price ? Number(original_price) : Number(price),
-      category, 
-      stock: Number(stock), 
-      description, 
+      category,
+      stock: Number(stock),
+      description,
       image_url: imageUrl,
+      images: imagesArr,
+      videos: videosArr,
+      is_featured: is_featured === "true" || is_featured === true,
       offer: offer || ""
     });
     res.json({ success: true, data: product });
@@ -596,32 +953,57 @@ app.post("/api/admin/products", adminAuth, upload.single("image"), async (req, r
 
 app.put("/api/admin/products/:id", adminAuth, (req, res, next) => {
   if (req.headers['content-type']?.includes('multipart/form-data')) {
-    upload.single("image")(req, res, next);
+    upload.fields([
+      { name: 'images', maxCount: 5 },
+      { name: 'videos', maxCount: 5 }
+    ])(req, res, next);
   } else {
     next();
   }
 }, async (req, res) => {
   try {
-    const { name, price, original_price, category, stock, description, image_url, offer } = req.body;
-    let imageUrl = image_url;
-    
-    if (req.file) {
-      imageUrl = "/images/" + req.file.filename;
-    }
-    
-    const updateData = { 
-      name, 
-      price: Number(price), 
+    const { name, price, original_price, category, stock, description, image_url, offer, is_featured } = req.body;
+
+    const updateData = {
+      name,
+      price: Number(price),
       original_price: original_price ? Number(original_price) : Number(price),
-      category, 
-      stock: Number(stock), 
+      category,
+      stock: Number(stock),
       description,
       offer: offer || ""
     };
-    if (imageUrl) {
-      updateData.image_url = imageUrl;
+
+    if (is_featured !== undefined) {
+      updateData.is_featured = is_featured === "true" || is_featured === true;
     }
-    
+
+    if (req.files) {
+      const newImages = [];
+      const newVideos = [];
+
+      if (req.files['images'] && req.files['images'].length > 0) {
+        newImages.push(...req.files['images'].map(file => "/images/" + file.filename));
+      } else if (image_url) {
+        newImages.push(image_url);
+      }
+
+      if (req.files['videos'] && req.files['videos'].length > 0) {
+        newVideos.push(...req.files['videos'].map(file => "/images/" + file.filename));
+      }
+
+      if (newImages.length > 0) {
+        updateData.images = newImages;
+        updateData.image_url = newImages[0];
+      }
+
+      if (newVideos.length > 0) {
+        updateData.videos = newVideos;
+      }
+    } else if (image_url) {
+      updateData.image_url = image_url;
+    }
+
     const product = await Product.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -650,16 +1032,22 @@ app.get("/api/admin/users", adminAuth, async (req, res) => {
   try {
     const users = await User.find().select("-password");
     const allOrders = await Order.find({}, { user_id: 1 });
+    const couponLocks = await CouponLock.find({}, { user_id: 1, locked: 1 });
     const orderCountMap = allOrders.reduce((acc, order) => {
       const key = String(order.user_id);
       acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const couponLockMap = couponLocks.reduce((acc, lock) => {
+      acc[String(lock.user_id)] = lock.locked;
       return acc;
     }, {});
 
     const normalizedUsers = users.map((user) => ({
       ...user.toObject(),
       role: getEffectiveRole(user),
-      orderCount: orderCountMap[String(user._id)] || 0
+      orderCount: orderCountMap[String(user._id)] || 0,
+      coupon_locked: couponLockMap[String(user._id)] === true
     }));
     res.json({ success: true, data: normalizedUsers });
   } catch {
@@ -775,6 +1163,158 @@ app.delete("/api/admin/orders/:id", adminAuth, async (req, res) => {
     res.json({ success: true, message: "Order deleted" });
   } catch {
     res.status(500).json({ success: false, message: "Failed to delete order" });
+  }
+});
+
+// ===== ADMIN COUPONS =====
+app.get("/api/admin/coupons", adminAuth, async (req, res) => {
+  try {
+    const coupons = await Coupon.find().populate('applicable_product_id', 'name').sort({ created_at: -1 });
+    res.json({ success: true, data: coupons });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to fetch coupons" });
+  }
+});
+
+app.post("/api/admin/coupons", adminAuth, async (req, res) => {
+  const { code, discount_type, discount_value, min_order_value, max_discount, is_active, applicable_product_id, target_audience, allowed_user_ids, usage_limit, usage_limit_per_user } = req.body;
+  if (!code || !discount_type || !discount_value) return res.status(400).json({ success: false, message: "Missing required fields" });
+  try {
+    const coupon = await Coupon.create({
+      code: code.trim().toUpperCase(),
+      discount_type, discount_value: Number(discount_value),
+      min_order_value: Number(min_order_value) || 0,
+      max_discount: Number(max_discount) || 0,
+      is_active: is_active !== false,
+      applicable_product_id: applicable_product_id || null,
+      target_audience: target_audience || "all",
+      allowed_user_ids: Array.isArray(allowed_user_ids) ? allowed_user_ids : [],
+      usage_limit: Number(usage_limit) || 0,
+      usage_limit_per_user: Number(usage_limit_per_user) || 1
+    });
+    res.json({ success: true, data: coupon });
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ success: false, message: "Coupon code already exists" });
+    res.status(500).json({ success: false, message: "Failed to create coupon" });
+  }
+});
+
+app.put("/api/admin/coupons/:id", adminAuth, async (req, res) => {
+  try {
+    const { code, discount_type, discount_value, min_order_value, max_discount, is_active, applicable_product_id, target_audience, allowed_user_ids, usage_limit, usage_limit_per_user } = req.body;
+    const updateData = {
+      code: (code || "").trim().toUpperCase(),
+      discount_type, discount_value: Number(discount_value),
+      min_order_value: Number(min_order_value) || 0,
+      max_discount: Number(max_discount) || 0,
+      is_active,
+      applicable_product_id: applicable_product_id || null,
+      target_audience: target_audience || "all",
+      allowed_user_ids: Array.isArray(allowed_user_ids) ? allowed_user_ids : [],
+      usage_limit: Number(usage_limit) || 0,
+      usage_limit_per_user: Number(usage_limit_per_user) || 1
+    };
+    const coupon = await Coupon.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    if (!coupon) return res.status(404).json({ success: false, message: "Coupon not found" });
+    res.json({ success: true, data: coupon });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to update coupon" });
+  }
+});
+
+app.delete("/api/admin/coupons/:id", adminAuth, async (req, res) => {
+  try {
+    const coupon = await Coupon.findByIdAndDelete(req.params.id);
+    if (!coupon) return res.status(404).json({ success: false, message: "Coupon not found" });
+    res.json({ success: true, message: "Coupon deleted" });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to delete coupon" });
+  }
+});
+
+app.get("/api/admin/coupon-locks", adminAuth, async (req, res) => {
+  try {
+    const lockedUsers = await CouponLock.find({ locked: true }).sort({ locked_at: -1 });
+    const userIds = lockedUsers.map(l => l.user_id);
+    const users = await User.find({ _id: { $in: userIds } }).select("name email");
+    const userMap = users.reduce((acc, u) => {
+      acc[String(u._id)] = u;
+      return acc;
+    }, {});
+
+    const payload = lockedUsers.map(lock => {
+      const owner = userMap[String(lock.user_id)];
+      return {
+        ...lock.toObject(),
+        id: lock._id,
+        user_name: owner?.name || "Customer",
+        user_email: owner?.email || "-"
+      };
+    });
+
+    res.json({ success: true, data: payload, count: payload.length });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to fetch coupon locks" });
+  }
+});
+
+app.post("/api/admin/coupon-locks/:userId/unlock", adminAuth, async (req, res) => {
+  try {
+    const lock = await CouponLock.findOneAndUpdate(
+      { user_id: req.params.userId },
+      { $set: { locked: false } },
+      { new: true, upsert: true }
+    );
+    res.json({ success: true, data: lock, message: "Coupon permission granted" });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to unlock coupon" });
+  }
+});
+
+app.post("/api/admin/coupon-locks/:userId/lock", adminAuth, async (req, res) => {
+  try {
+    const lock = await CouponLock.findOneAndUpdate(
+      { user_id: req.params.userId },
+      {
+        $set: {
+          locked: true,
+          locked_at: new Date()
+        }
+      },
+      { new: true, upsert: true }
+    );
+    res.json({ success: true, data: lock, message: "Coupon access revoked" });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to lock coupon" });
+  }
+});
+
+app.get("/api/coupon-locks/me", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.json({ success: true, data: { locked: false } });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return res.json({ success: true, data: { locked: false } });
+    }
+
+    const lock = await CouponLock.findOne({ user_id: String(user._id) });
+    return res.json({
+      success: true,
+      data: {
+        locked: lock ? lock.locked : false,
+        last_coupon_used: lock ? lock.last_coupon_used : "",
+        locked_at: lock ? lock.locked_at : null
+      }
+    });
+  } catch {
+    return res.json({ success: true, data: { locked: false } });
   }
 });
 

@@ -1,0 +1,15 @@
+{
+  "short_name": "Velux Kicks",
+  "name": "Velux Kicks Ecommerce",
+  "icons": [
+    {
+      "src": "Logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}

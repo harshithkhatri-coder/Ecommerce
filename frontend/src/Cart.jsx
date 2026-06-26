@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Trash2, ShoppingCart, ArrowLeft, Plus, Minus } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Trash2, ShoppingCart, ArrowLeft, Plus, Minus, Tag } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
 
@@ -8,6 +8,53 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   const [loading, setLoading] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState("");
+  const [couponLocked, setCouponLocked] = useState(false);
+  const [checkingLock, setCheckingLock] = useState(false);
+
+  useEffect(() => {
+    const storedCoupon = localStorage.getItem('appliedCoupon');
+    if (storedCoupon) {
+      try {
+        setAppliedCoupon(JSON.parse(storedCoupon));
+        setCouponCode(JSON.parse(storedCoupon).code);
+        localStorage.removeItem('appliedCoupon');
+      } catch (e) {
+        localStorage.removeItem('appliedCoupon');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const checkCouponLock = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      setCheckingLock(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/coupon-locks/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && data.data?.locked) {
+          setCouponLocked(true);
+        }
+      } catch (err) {
+        console.error("Error checking coupon lock:", err);
+      } finally {
+        setCheckingLock(false);
+      }
+    };
+
+    checkCouponLock();
+  }, []);
+
+  const discountAmount = appliedCoupon ? appliedCoupon.discount_amount : 0;
+  const tax = Math.round((total - discountAmount) * 0.18);
+  const grandTotal = total - discountAmount + tax;
 
   // Maximum allowed items per user
   const MAX_ITEMS = 5;
@@ -33,6 +80,60 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
 
     newCart[index].quantity = newQuantity;
     setCart(newCart);
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponError("");
+
+    if (couponLocked) {
+      setCouponError("Your coupon access is locked. Please wait for admin permission to use coupons.");
+      setCouponLoading(false);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/coupons/validate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          subtotal: total,
+          cartItems: cart.map((item) => ({
+            product_id: item._id || item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+          })),
+          userId: user?.id || user?._id,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAppliedCoupon(data.data);
+        setCouponError("");
+      } else {
+        setCouponError(data.message || "Invalid coupon");
+        setAppliedCoupon(null);
+        if (data.coupon_locked) {
+          setCouponLocked(true);
+        }
+      }
+    } catch {
+      setCouponError("Failed to validate coupon");
+    }
+    setCouponLoading(false);
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
   };
 
   const handleCheckout = async () => {
@@ -61,6 +162,7 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
 
     setLoading(true);
     try {
+      const token = localStorage.getItem("token");
       const items = cart.map((item) => ({
         product_id: item._id || item.id,
         name: item.name,
@@ -69,17 +171,22 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
         image_url: item.image_url || item.image,
       }));
 
-      const tax = Math.round(total * 0.18);
-      const grandTotal = total + tax;
+
 
       const response = await fetch(`${API_BASE_URL}/orders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           userId: user.id || user._id,
           items: items,
+          subtotal: total,
           total: grandTotal,
           address: userAddress,
+          coupon_code: appliedCoupon?.code || "",
+          discount: discountAmount
         }),
       });
 
@@ -202,15 +309,64 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                   </div>
                   <div className="flex justify-between text-gray-700">
                     <span>Tax</span>
-                    <span className="font-semibold">₹{Math.round(total * 0.18)}</span>
+                    <span className="font-semibold">₹{tax}</span>
                   </div>
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Coupon ({appliedCoupon.code})</span>
+                      <span className="font-semibold">-₹{discountAmount}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Coupon Code Input */}
+                <div className="pt-3 border-t border-gray-100">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <Tag size={14} className="inline mr-1" />
+                    Coupon Code
+                  </label>
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div>
+                        <span className="font-bold text-green-700">{appliedCoupon.code}</span>
+                        <span className="text-green-600 text-sm ml-2">-₹{appliedCoupon.discount_amount}</span>
+                      </div>
+                      <button onClick={removeCoupon} className="text-red-500 hover:text-red-700 text-sm font-semibold">Remove</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {couponLocked && !checkingLock && (
+                        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-3 py-2 rounded-lg text-sm">
+                          Your coupon access is locked. You need admin permission to use coupons again.
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={couponCode}
+                          onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(""); }}
+                          placeholder="Enter code"
+                          disabled={couponLocked}
+                          className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg text-sm focus:border-gray-400 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500"
+                        />
+                        <button
+                          onClick={handleApplyCoupon}
+                          disabled={couponLoading || !couponCode.trim() || couponLocked}
+                          className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition disabled:opacity-50"
+                        >
+                          {couponLoading ? "..." : "Apply"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {couponError && <p className="text-red-500 text-xs mt-1">{couponError}</p>}
                 </div>
 
                 <div className="border-t-2 border-gray-200 pt-4 mb-6">
                   <div className="flex justify-between text-2xl font-bold text-gray-800">
                     <span>Total</span>
                     <span className="bg-gradient-to-r from-gray-700 to-gray-800 bg-clip-text text-transparent">
-                      ₹{total + Math.round(total * 0.18)}
+                      ₹{grandTotal}
                     </span>
                   </div>
                 </div>
