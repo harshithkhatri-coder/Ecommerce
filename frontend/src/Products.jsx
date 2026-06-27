@@ -18,6 +18,7 @@ export default function Products({ onAddToCart, onPageChange }) {
   useEffect(() => {
     fetchProducts();
     fetchWishlist();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchProducts = async () => {

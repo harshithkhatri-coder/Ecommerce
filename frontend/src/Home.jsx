@@ -7,7 +7,6 @@ import { productsData } from "./productsData";
 
 export default function Home({ cart, onAddToCart, onPageChange, user }) {
   const [highlightProducts, setHighlightProducts] = useState(() => productsData.slice(0, 3));
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -75,41 +74,35 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
           collection in the products section.
         </p>
 
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-gray-400"></div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {highlightProducts.map((product) => (
-              <button
-                key={product._id || product.id}
-                type="button"
-                onClick={() => onPageChange("ProductDetails", product._id || product.id)}
-                className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition transform hover:-translate-y-1"
-              >
-                <div className="relative h-64">
-                  <img
-                    src={resolveImageUrl(product.image_url || product.image)}
-                    alt={product.name}
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-300 mb-1">
-                      {product.category}
-                    </p>
-                    <h3 className="text-white text-lg font-semibold">
-                      {product.name}
-                    </h3>
-                  </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {highlightProducts.map((product) => (
+            <button
+              key={product._id || product.id}
+              type="button"
+              onClick={() => onPageChange("ProductDetails", product._id || product.id)}
+              className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition transform hover:-translate-y-1"
+            >
+              <div className="relative h-64">
+                <img
+                  src={resolveImageUrl(product.image_url || product.image)}
+                  alt={product.name}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute bottom-4 left-4 right-4">
+                  <p className="text-xs uppercase tracking-wide text-gray-300 mb-1">
+                    {product.category}
+                  </p>
+                  <h3 className="text-white text-lg font-semibold">
+                    {product.name}
+                  </h3>
                 </div>
-              </button>
-            ))}
-          </div>
-        )}
+              </div>
+            </button>
+          ))}
+        </div>
 
         {/* CTA to go to full products list */}
         <div className="flex justify-center mt-10">
