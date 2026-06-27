@@ -22,7 +22,7 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
         if (response.ok) {
           const data = await response.json();
           if (isMounted && data.success && Array.isArray(data.data) && data.data.length > 0) {
-            setHighlightProducts(data.data.slice(0, 3));
+            setHighlightProducts(data.data.filter(Boolean).slice(0, 3));
             clearTimeout(timeoutId);
             return;
           }
@@ -38,7 +38,7 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
         if (isMounted && fallbackResponse.ok) {
           const fallbackData = await fallbackResponse.json();
           if (fallbackData.success && Array.isArray(fallbackData.data) && fallbackData.data.length > 0) {
-            setHighlightProducts(fallbackData.data.slice(0, 3));
+            setHighlightProducts(fallbackData.data.filter(Boolean).slice(0, 3));
           }
         }
       } catch (err) {

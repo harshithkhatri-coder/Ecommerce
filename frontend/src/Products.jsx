@@ -41,7 +41,7 @@ export default function Products({ onAddToCart, onPageChange }) {
       const data = await response.json();
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         // Use API data only if it is not empty to ensure products are shown.
-        setProducts(data.data);
+        setProducts(data.data.filter(Boolean));
       }
     } catch (err) {
       clearTimeout(timeoutId);
@@ -115,8 +115,8 @@ export default function Products({ onAddToCart, onPageChange }) {
   // Memoized filtered/sorted products — only recalculate when inputs change
   const filteredProducts = useMemo(() =>
     selectedCategory === "All"
-      ? products
-      : products.filter(p => (p.category || "").toLowerCase().trim() === selectedCategory.toLowerCase().trim()),
+      ? products.filter(Boolean)
+      : products.filter(Boolean).filter(p => (p.category || "").toLowerCase().trim() === selectedCategory.toLowerCase().trim()),
     [products, selectedCategory]
   );
 
@@ -143,7 +143,7 @@ export default function Products({ onAddToCart, onPageChange }) {
 
   // Unique categories — memoized
   const uniqueCategories = useMemo(
-    () => ["All", ...new Set(products.map(p => p.category).filter(Boolean))],
+    () => ["All", ...new Set(products.filter(Boolean).map(p => p.category).filter(Boolean))],
     [products]
   );
 
