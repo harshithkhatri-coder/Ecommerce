@@ -36,6 +36,14 @@ const storage = multer.diskStorage({
   }
 });
 const upload = multer({ storage: storage });
+const memoryStorage = multer.memoryStorage();
+const memoryUpload = multer({ storage: memoryStorage });
+
+function fileToBase64(file) {
+  if (!file || !file.buffer) return null;
+  const mime = file.mimetype || "application/octet-stream";
+  return `data:${mime};base64,${file.buffer.toString("base64")}`;
+}
 
 // ===== Middleware =====
 app.use(cors({
@@ -905,11 +913,10 @@ app.get("/api/admin/products", adminAuth, async (req, res) => {
 });
 
 app.post("/api/admin/products", adminAuth, (req, res, next) => {
-  const uploadMiddleware = upload.fields([
+  memoryUpload.fields([
     { name: 'images', maxCount: 5 },
     { name: 'videos', maxCount: 5 }
-  ]);
-  uploadMiddleware(req, res, next);
+  ])(req, res, next);
 }, async (req, res) => {
   try {
     const { name, price, original_price, category, stock, description, image_url, offer, is_featured } = req.body;
@@ -919,14 +926,14 @@ app.post("/api/admin/products", adminAuth, (req, res, next) => {
 
     if (req.files) {
       if (req.files['images'] && req.files['images'].length > 0) {
-        imagesArr = req.files['images'].map(file => "/images/" + file.filename);
-        imageUrl = imagesArr[0];
+        imagesArr = req.files['images'].map(file => fileToBase64(file)).filter(Boolean);
+        imageUrl = imagesArr[0] || imageUrl;
       } else if (image_url) {
         imagesArr = [image_url];
       }
 
       if (req.files['videos'] && req.files['videos'].length > 0) {
-        videosArr = req.files['videos'].map(file => "/images/" + file.filename);
+        videosArr = req.files['videos'].map(file => fileToBase64(file)).filter(Boolean);
       }
     } else if (image_url) {
       imagesArr = [image_url];
@@ -953,7 +960,7 @@ app.post("/api/admin/products", adminAuth, (req, res, next) => {
 
 app.put("/api/admin/products/:id", adminAuth, (req, res, next) => {
   if (req.headers['content-type']?.includes('multipart/form-data')) {
-    upload.fields([
+    memoryUpload.fields([
       { name: 'images', maxCount: 5 },
       { name: 'videos', maxCount: 5 }
     ])(req, res, next);
@@ -983,13 +990,14 @@ app.put("/api/admin/products/:id", adminAuth, (req, res, next) => {
       const newVideos = [];
 
       if (req.files['images'] && req.files['images'].length > 0) {
-        newImages.push(...req.files['images'].map(file => "/images/" + file.filename));
+        const base64Images = req.files['images'].map(file => fileToBase64(file)).filter(Boolean);
+        newImages.push(...base64Images);
       } else if (image_url) {
         newImages.push(image_url);
       }
 
       if (req.files['videos'] && req.files['videos'].length > 0) {
-        newVideos.push(...req.files['videos'].map(file => "/images/" + file.filename));
+        newVideos.push(...req.files['videos'].map(file => fileToBase64(file)).filter(Boolean));
       }
 
       if (newImages.length > 0) {

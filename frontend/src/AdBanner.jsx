@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Tag, ExternalLink } from "lucide-react";
 import API_BASE_URL from "./config";
+import { resolveImageUrl } from "./imageHelpers";
 
 const STORAGE_KEY = "velux_seen_ad_ids";
 
@@ -85,7 +86,7 @@ export default function AdBanner({ user, onNavigate }) {
             {ad.image_url && (
               <div className="relative h-48 bg-gray-100">
                 <img
-                  src={ad.image_url.startsWith("http") ? ad.image_url : `${API_BASE_URL}${ad.image_url}`}
+                  src={resolveImageUrl(ad.image_url)}
                   alt={ad.title}
                   className="w-full h-full object-cover"
                   onError={(e) => {
