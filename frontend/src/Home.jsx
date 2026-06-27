@@ -3,36 +3,33 @@ import Carousel from "./Carousel";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
 import AdBanner from "./AdBanner";
+import { productsData } from "./productsData";
 
 export default function Home({ cart, onAddToCart, onPageChange, user }) {
-  const [highlightProducts, setHighlightProducts] = useState([]);
+  const [highlightProducts, setHighlightProducts] = useState(() => productsData.slice(0, 3));
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort("Products request timed out"), 20000);
+    const timeoutId = setTimeout(() => controller.abort("Products request timed out"), 4000);
 
     const fetchProducts = async () => {
-      setLoading(true);
-
       try {
         const response = await fetch(`${API_BASE_URL}/products/featured`, {
           signal: controller.signal
         });
 
-        if (!response.ok) {
-          throw new Error(`Featured products request failed with status ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (isMounted && data.success && Array.isArray(data.data) && data.data.length > 0) {
-          setHighlightProducts(data.data.slice(0, 3));
-          return;
+        if (response.ok) {
+          const data = await response.json();
+          if (isMounted && data.success && Array.isArray(data.data) && data.data.length > 0) {
+            setHighlightProducts(data.data.slice(0, 3));
+            clearTimeout(timeoutId);
+            return;
+          }
         }
       } catch (err) {
-        if (!isMounted || err.name === "AbortError" || controller.signal.aborted) return;
-        console.error("Error fetching featured products:", err);
+        // Silent fallback in background
       }
 
       try {
@@ -41,17 +38,13 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
         });
         if (isMounted && fallbackResponse.ok) {
           const fallbackData = await fallbackResponse.json();
-          if (fallbackData.success && Array.isArray(fallbackData.data)) {
+          if (fallbackData.success && Array.isArray(fallbackData.data) && fallbackData.data.length > 0) {
             setHighlightProducts(fallbackData.data.slice(0, 3));
           }
         }
       } catch (err) {
-        if (!isMounted || err.name === "AbortError" || controller.signal.aborted) return;
-        console.error("Error fetching fallback products:", err);
+        // Silent fallback in background
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
         clearTimeout(timeoutId);
       }
     };
@@ -90,9 +83,9 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {highlightProducts.map((product) => (
               <button
-                key={product._id}
+                key={product._id || product.id}
                 type="button"
-                onClick={() => onPageChange("ProductDetails", product._id)}
+                onClick={() => onPageChange("ProductDetails", product._id || product.id)}
                 className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition transform hover:-translate-y-1"
               >
                 <div className="relative h-64">
@@ -105,7 +98,7 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
                   <div className="absolute bottom-4 left-4 right-4">
-                     <p className="text-xs uppercase tracking-wide text-gray-300 mb-1">
+                    <p className="text-xs uppercase tracking-wide text-gray-300 mb-1">
                       {product.category}
                     </p>
                     <h3 className="text-white text-lg font-semibold">

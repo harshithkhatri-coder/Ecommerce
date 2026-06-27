@@ -277,12 +277,9 @@ export default function Admin({ onPageChange, onLogout }) {
       target_audience: couponForm.target_audience,
       allowed_user_ids: allowedUserIdsArray,
       usage_limit: Number(couponForm.usage_limit) || 0,
-      usage_limit_per_user: Number(couponForm.usage_limit_per_user) || 1
+      usage_limit_per_user: Number(couponForm.usage_limit_per_user) || 1,
+      applicable_product_id: couponForm.applicable_product_id || null
     };
-
-    if (couponForm.applicable_product_id) {
-      body.applicable_product_id = couponForm.applicable_product_id;
-    }
 
     try {
       const response = await fetch(url, {
@@ -1885,6 +1882,22 @@ const handleEditProduct = (product) => {
                     placeholder="0 = no limit"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Applicable Product</label>
+                <select
+                  value={couponForm.applicable_product_id}
+                  onChange={(e) => setCouponForm({ ...couponForm, applicable_product_id: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
+                >
+                  <option value="">All Products</option>
+                  {products.map((p) => (
+                    <option key={p._id || p.id} value={p._id || p.id}>
+                      {p.name} (₹{p.price})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

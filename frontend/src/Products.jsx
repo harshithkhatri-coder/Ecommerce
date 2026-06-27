@@ -12,7 +12,7 @@ export default function Products({ onAddToCart, onPageChange }) {
   const [sortOption, setSortOption] = useState("featured");
   const [products, setProducts] = useState(productsData); // Fallback data
   const [wishlist, setWishlist] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const searchDebounceRef = useRef(null);
 
   useEffect(() => {
@@ -22,10 +22,12 @@ export default function Products({ onAddToCart, onPageChange }) {
 
   const fetchProducts = async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // allow API cold start
+    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 seconds timeout
 
     try {
-      setLoading(true);
+      if (products.length === 0) {
+        setLoading(true);
+      }
       const response = await fetch(`${API_BASE_URL}/products`, {
         signal: controller.signal
       });
@@ -36,19 +38,17 @@ export default function Products({ onAddToCart, onPageChange }) {
       }
 
       const data = await response.json();
-      if (data.success && Array.isArray(data.data)) {
-        // Use API data even when it's empty to reflect actual backend state.
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        // Use API data only if it is not empty to ensure products are shown.
         setProducts(data.data);
       }
     } catch (err) {
       clearTimeout(timeoutId);
-      console.error("Error fetching products:", err);
-      setProducts(productsData);
+      console.warn("Error fetching products, using local fallback:", err);
     } finally {
       setLoading(false);
     }
   };
-
   const fetchWishlist = async () => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (!user) return;
