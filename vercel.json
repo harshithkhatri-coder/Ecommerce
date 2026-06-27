@@ -9,15 +9,5 @@
         "buildCommand": "npm run vercel-build"
       }
     }
-  ],
-  "routes": [
-    {
-      "src": "/images/(.*)",
-      "dest": "/images/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
   ]
 }
