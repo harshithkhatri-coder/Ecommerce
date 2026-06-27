@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Header from "./Header";
 import Home from "./Home";
 import About from "./About";
@@ -75,7 +75,7 @@ export default function App() {
 
 
 
-  const addToCart = (product, options = {}) => {
+  const addToCart = useCallback((product, options = {}) => {
     // Calculate current total items in cart
     const currentTotalItems = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
     const MAX_ITEMS = 5;
@@ -114,24 +114,24 @@ export default function App() {
     if (!options.silent) {
       alert("Product added to cart");
     }
-  };
+  }, [cart]);
 
 
-  const handlePageChange = (page, productId = null) => {
+  const handlePageChange = useCallback((page, productId = null) => {
     setCurrentPage(page);
     setSelectedProductId(productId);
     window.scrollTo({ top: 0, behavior: "auto" });
-  };
+  }, []);
 
   // Unified logout function - clears all auth
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
     localStorage.removeItem("adminUser");
     localStorage.removeItem("adminToken");
     setUser(null);
     handlePageChange("Home");
-  };
+  }, [handlePageChange]);
 
   // Auto-logout after 2 hours of inactivity
   useEffect(() => {
@@ -205,9 +205,9 @@ export default function App() {
     }
   };
 
-  const removeFromCart = (index) => {
+  const removeFromCart = useCallback((index) => {
     setCart((prev) => prev.filter((_, i) => i !== index));
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-950 to-black flex flex-col">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { productsData } from "./productsData";
 import { Heart } from "lucide-react";
 import API_BASE_URL from "./config";
@@ -8,10 +8,12 @@ export default function Products({ onAddToCart, onPageChange }) {
   const [displayed, setDisplayed] = useState(12);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortOption, setSortOption] = useState("featured");
   const [products, setProducts] = useState(productsData); // Fallback data
   const [wishlist, setWishlist] = useState([]);
   const [loading, setLoading] = useState(true);
+  const searchDebounceRef = useRef(null);
 
   useEffect(() => {
     fetchProducts();
@@ -100,50 +102,63 @@ export default function Products({ onAddToCart, onPageChange }) {
     }
   };
 
-  const filteredProducts = selectedCategory === "All"
-    ? products
-    : products.filter(p => (p.category || "").toLowerCase().trim() === selectedCategory.toLowerCase().trim());
+  // Debounce search input
+  const handleSearchChange = useCallback((e) => {
+    const val = e.target.value;
+    setSearchQuery(val);
+    setDisplayed(12);
+    clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(val), 250);
+  }, []);
 
-  const searchedProducts = searchQuery.trim() === ""
-    ? filteredProducts
-    : filteredProducts.filter((p) => {
-        const lower = searchQuery.toLowerCase().trim();
-        return (p.name || "").toLowerCase().includes(lower)
-          || (p.description || "").toLowerCase().includes(lower)
-          || (p.category || "").toLowerCase().includes(lower);
-      });
+  // Memoized filtered/sorted products — only recalculate when inputs change
+  const filteredProducts = useMemo(() =>
+    selectedCategory === "All"
+      ? products
+      : products.filter(p => (p.category || "").toLowerCase().trim() === selectedCategory.toLowerCase().trim()),
+    [products, selectedCategory]
+  );
 
-  const sortedProducts = [...searchedProducts].sort((a, b) => {
+  const searchedProducts = useMemo(() => {
+    const q = debouncedSearch.toLowerCase().trim();
+    if (!q) return filteredProducts;
+    return filteredProducts.filter(p =>
+      (p.name || "").toLowerCase().includes(q) ||
+      (p.description || "").toLowerCase().includes(q) ||
+      (p.category || "").toLowerCase().includes(q)
+    );
+  }, [filteredProducts, debouncedSearch]);
+
+  const sortedProducts = useMemo(() => {
+    const arr = [...searchedProducts];
     switch (sortOption) {
-      case "priceLowHigh":
-        return (a.price || 0) - (b.price || 0);
-      case "priceHighLow":
-        return (b.price || 0) - (a.price || 0);
-      case "nameAZ":
-        return (a.name || "").localeCompare(b.name || "");
-      case "nameZA":
-        return (b.name || "").localeCompare(a.name || "");
-      default:
-        return 0;
+      case "priceLowHigh": return arr.sort((a, b) => (a.price || 0) - (b.price || 0));
+      case "priceHighLow": return arr.sort((a, b) => (b.price || 0) - (a.price || 0));
+      case "nameAZ":       return arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      case "nameZA":       return arr.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+      default:             return arr;
     }
-  });
+  }, [searchedProducts, sortOption]);
 
-  // Dynamically generate categories from products
-  const uniqueCategories = ["All", ...new Set(products.map(p => p.category).filter(Boolean))];
+  // Unique categories — memoized
+  const uniqueCategories = useMemo(
+    () => ["All", ...new Set(products.map(p => p.category).filter(Boolean))],
+    [products]
+  );
 
   const visibleProducts = sortedProducts.slice(0, displayed);
   const hasMore = displayed < sortedProducts.length;
 
-  const loadMore = () => {
-    setDisplayed((prev) => Math.min(prev + 4, filteredProducts.length));
-  };
+  const loadMore = useCallback(() => {
+    setDisplayed(prev => Math.min(prev + 8, sortedProducts.length));
+  }, [sortedProducts.length]);
 
-  const handleCategoryChange = (category) => {
+  const handleCategoryChange = useCallback((category) => {
     setSelectedCategory(category);
     setDisplayed(12);
-  };
+  }, []);
 
-  const handleAddToCart = (product) => {
+  const handleAddToCart = useCallback((product) => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (!user) {
       alert("Please login to add items to cart");
@@ -151,7 +166,7 @@ export default function Products({ onAddToCart, onPageChange }) {
       return;
     }
     onAddToCart(product);
-  };
+  }, [onAddToCart, onPageChange]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-black to-gray-950">
@@ -170,10 +185,7 @@ export default function Products({ onAddToCart, onPageChange }) {
             <input
               type="search"
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setDisplayed(12);
-              }}
+              onChange={handleSearchChange}
               placeholder="Search products by name, category, or description"
               className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-800 focus:ring-2 focus:ring-gray-400"
             />
@@ -239,6 +251,8 @@ export default function Products({ onAddToCart, onPageChange }) {
                     <img
                       src={resolveImageUrl(product.image_url || product.image || product.images?.[0])}
                       alt={product.name}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-contain bg-slate-100 hover:scale-105 transition-transform duration-500"
                     />
                      <div className="absolute top-2 right-2 bg-gray-600 text-white px-2 py-1 rounded text-xs font-semibold">

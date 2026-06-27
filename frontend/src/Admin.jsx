@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Package, ShoppingCart, Users, DollarSign, Plus, Edit2, Trash2,
   Eye, X, Home, BarChart3, TrendingUp, Lock, Mail, LogOut, Upload,
@@ -216,22 +216,38 @@ export default function Admin({ onPageChange, onLogout }) {
     }
   };
 
+  const formatDateForInput = (dateVal) => {
+    if (!dateVal) return "";
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return "";
+      return d.toISOString().slice(0, 16);
+    } catch {
+      return "";
+    }
+  };
+
   const openCouponEditor = (coupon = null) => {
-    setEditingCoupon(coupon);
-    setCouponForm({
-      code: coupon?.code || "",
-      discount_type: coupon?.discount_type || "percentage",
-      discount_value: coupon?.discount_value?.toString() || "",
-      min_order_value: coupon?.min_order_value?.toString() || "0",
-      max_discount: coupon?.max_discount?.toString() || "0",
-      applicable_product_id: coupon?.applicable_product_id?._id || coupon?.applicable_product_id || "",
-      is_active: coupon?.is_active !== false,
-      target_audience: coupon?.target_audience || "all",
-      allowed_user_ids: Array.isArray(coupon?.allowed_user_ids) ? coupon.allowed_user_ids.join(", ") : "",
-      usage_limit: coupon?.usage_limit?.toString() || "0",
-      usage_limit_per_user: coupon?.usage_limit_per_user?.toString() || "1"
-    });
-    setShowCouponModal(true);
+    try {
+      setEditingCoupon(coupon);
+      setCouponForm({
+        code: coupon?.code || "",
+        discount_type: coupon?.discount_type || "percentage",
+        discount_value: coupon?.discount_value !== undefined && coupon?.discount_value !== null ? coupon.discount_value.toString() : "",
+        min_order_value: coupon?.min_order_value !== undefined && coupon?.min_order_value !== null ? coupon.min_order_value.toString() : "0",
+        max_discount: coupon?.max_discount !== undefined && coupon?.max_discount !== null ? coupon.max_discount.toString() : "0",
+        applicable_product_id: coupon?.applicable_product_id?._id || coupon?.applicable_product_id || "",
+        is_active: coupon?.is_active !== false,
+        target_audience: coupon?.target_audience || "all",
+        allowed_user_ids: Array.isArray(coupon?.allowed_user_ids) ? coupon.allowed_user_ids.join(", ") : "",
+        usage_limit: coupon?.usage_limit !== undefined && coupon?.usage_limit !== null ? coupon.usage_limit.toString() : "0",
+        usage_limit_per_user: coupon?.usage_limit_per_user !== undefined && coupon?.usage_limit_per_user !== null ? coupon.usage_limit_per_user.toString() : "1"
+      });
+      setShowCouponModal(true);
+    } catch (err) {
+      console.error("Error opening coupon editor:", err);
+      alert("Failed to open coupon editor: " + err.message);
+    }
   };
 
   const closeCouponModal = () => {
@@ -278,11 +294,36 @@ export default function Admin({ onPageChange, onLogout }) {
         body: JSON.stringify(body)
       });
 
-      const data = await response.json();
+    const data = await response.json();
       if (data.success) {
-        alert(editingCoupon ? "Coupon updated!" : "Coupon created!");
+        // Close the modal first so the UI responds instantly
         closeCouponModal();
-        fetchData(token);
+
+        // Update state locally without requiring a full reload of all 8 admin endpoints
+        if (editingCoupon) {
+          setCoupons(prev => {
+            const updated = prev.map(c =>
+              (c._id || c.id) === (editingCoupon._id || editingCoupon.id)
+                ? { ...c, ...data.data } : c
+            );
+            setStats(s => ({
+              ...s,
+              totalCoupons: updated.filter(coupon => coupon.is_active).length
+            }));
+            return updated;
+          });
+        } else {
+          setCoupons(prev => {
+            const updated = [data.data, ...prev];
+            setStats(s => ({
+              ...s,
+              totalCoupons: updated.filter(coupon => coupon.is_active).length
+            }));
+            return updated;
+          });
+        }
+
+        alert(editingCoupon ? "Coupon updated!" : "Coupon created!");
       } else {
         alert(data.message || "Error saving coupon");
       }
@@ -302,8 +343,15 @@ export default function Admin({ onPageChange, onLogout }) {
       });
       const data = await response.json();
       if (data.success) {
+        setCoupons(prev => {
+          const updated = prev.filter(c => (c._id || c.id) !== couponId);
+          setStats(s => ({
+            ...s,
+            totalCoupons: updated.filter(coupon => coupon.is_active).length
+          }));
+          return updated;
+        });
         alert("Coupon deleted!");
-        fetchData(token);
       } else {
         alert(data.message || "Error deleting coupon");
       }
@@ -335,21 +383,26 @@ export default function Admin({ onPageChange, onLogout }) {
   };
 
   const openAdEditor = (ad = null) => {
-    setEditingAd(ad);
-    setAdForm({
-      title: ad?.title || "",
-      message: ad?.message || "",
-      image_url: ad?.image_url || "",
-      link_url: ad?.link_url || "",
-      button_text: ad?.button_text || "Shop Now",
-      display_type: ad?.display_type || "banner",
-      is_active: ad?.is_active !== false,
-      priority: ad?.priority?.toString() || "0",
-      start_date: ad?.start_date ? new Date(ad.start_date).toISOString().slice(0, 16) : "",
-      end_date: ad?.end_date ? new Date(ad.end_date).toISOString().slice(0, 16) : "",
-      target_audience: ad?.target_audience || "all"
-    });
-    setShowAdModal(true);
+    try {
+      setEditingAd(ad);
+      setAdForm({
+        title: ad?.title || "",
+        message: ad?.message || "",
+        image_url: ad?.image_url || "",
+        link_url: ad?.link_url || "",
+        button_text: ad?.button_text || "Shop Now",
+        display_type: ad?.display_type || "banner",
+        is_active: ad?.is_active !== false,
+        priority: ad?.priority?.toString() || "0",
+        start_date: formatDateForInput(ad?.start_date),
+        end_date: formatDateForInput(ad?.end_date),
+        target_audience: ad?.target_audience || "all"
+      });
+      setShowAdModal(true);
+    } catch (err) {
+      console.error("Error opening ad editor:", err);
+      alert("Failed to open ad editor: " + err.message);
+    }
   };
 
   const closeAdModal = () => {
@@ -377,9 +430,16 @@ export default function Admin({ onPageChange, onLogout }) {
 
       const data = await response.json();
       if (data.success) {
-        alert(editingAd ? "Ad updated!" : "Ad created!");
         closeAdModal();
-        fetchData(token);
+        if (editingAd) {
+          setAds(prev => prev.map(a =>
+            (a._id || a.id) === (editingAd._id || editingAd.id)
+              ? { ...a, ...data.data } : a
+          ));
+        } else {
+          setAds(prev => [data.data, ...prev]);
+        }
+        alert(editingAd ? "Ad updated!" : "Ad created!");
       } else {
         alert(data.message || "Error saving ad");
       }
@@ -399,8 +459,8 @@ export default function Admin({ onPageChange, onLogout }) {
       });
       const data = await response.json();
       if (data.success) {
+        setAds(prev => prev.filter(a => (a._id || a.id) !== adId));
         alert("Ad deleted!");
-        fetchData(token);
       } else {
         alert(data.message || "Error deleting ad");
       }
@@ -466,147 +526,111 @@ export default function Admin({ onPageChange, onLogout }) {
 
       return () => clearTimeout(timeout);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchData = async (token) => {
+  const fetchData = useCallback(async (token) => {
     try {
-      const productsRes = await fetch(`${API_BASE_URL}/admin/products`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const productsData = await productsRes.json();
-      if (productsRes.ok && productsData.success) {
-        setProducts(productsData.data || []);
-      } else {
-        const publicProductsRes = await fetch(`${API_BASE_URL}/products`);
-        const publicProductsData = await publicProductsRes.json();
-        if (publicProductsRes.ok && publicProductsData.success) {
-          setProducts(publicProductsData.data || []);
-        } else {
-          setProducts([]);
+      // Run all API calls in parallel for maximum speed
+      const headers = { Authorization: `Bearer ${token}` };
+      const [
+        productsRes,
+        carouselRes,
+        ordersRes,
+        notificationsRes,
+        unreadRes,
+        usersRes,
+        couponsRes,
+        adsRes
+      ] = await Promise.allSettled([
+        fetch(`${API_BASE_URL}/admin/products`, { headers }),
+        fetch(`${API_BASE_URL}/admin/carousel`, { headers }),
+        fetch(`${API_BASE_URL}/admin/orders`, { headers }),
+        fetch(`${API_BASE_URL}/admin/notifications`, { headers }),
+        fetch(`${API_BASE_URL}/admin/notifications/unread-count`, { headers }),
+        fetch(`${API_BASE_URL}/admin/users`, { headers }),
+        fetch(`${API_BASE_URL}/admin/coupons`, { headers }),
+        fetch(`${API_BASE_URL}/admin/ads`, { headers })
+      ]);
+
+      // Products
+      if (productsRes.status === "fulfilled" && productsRes.value.ok) {
+        const d = await productsRes.value.json();
+        if (d.success) {
+          setProducts(d.data || []);
+          setStats(prev => ({ ...prev, totalProducts: (d.data || []).length }));
         }
       }
 
-      try {
-        const carouselRes = await fetch(`${API_BASE_URL}/admin/carousel`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const carouselData = await carouselRes.json();
-        if (carouselRes.ok && carouselData.success && Array.isArray(carouselData.data)) {
-          setCarouselItems(carouselData.data);
-          localStorage.setItem("carouselImages", JSON.stringify(carouselData.data));
+      // Carousel
+      if (carouselRes.status === "fulfilled" && carouselRes.value.ok) {
+        const d = await carouselRes.value.json();
+        if (d.success && Array.isArray(d.data)) {
+          setCarouselItems(d.data);
+          localStorage.setItem("carouselImages", JSON.stringify(d.data));
         }
-      } catch (e) {
-        console.error("Error fetching carousel:", e);
       }
 
-      try {
-        const ordersRes = await fetch(`${API_BASE_URL}/admin/orders`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const ordersData = await ordersRes.json();
-        if (ordersData.success) {
-          setOrders(ordersData.data || []);
+      // Orders
+      if (ordersRes.status === "fulfilled" && ordersRes.value.ok) {
+        const d = await ordersRes.value.json();
+        if (d.success) {
+          const ordersArr = d.data || [];
+          setOrders(ordersArr);
+          const totalRevenue = ordersArr
+            .filter(o => o.status !== "Cancelled")
+            .reduce((sum, o) => sum + (o.total || 0), 0);
+          setStats(prev => ({ ...prev, totalOrders: ordersArr.length, totalRevenue }));
         } else {
           setOrders([]);
         }
-
-        const totalRevenue = (ordersData.data || [])
-          .filter((order) => order.status !== "Cancelled")
-          .reduce((sum, order) => sum + (order.total || 0), 0);
-        setStats(prev => ({
-          ...prev,
-          totalOrders: (ordersData.data || []).length,
-          totalRevenue,
-        }));
-      } catch (e) {
-        console.error("Error fetching orders:", e);
-        setOrders([]);
       }
 
-      try {
-        const notificationsRes = await fetch(`${API_BASE_URL}/admin/notifications`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const notificationsData = await notificationsRes.json();
-        if (notificationsData.success) {
-          setNotifications(notificationsData.data || []);
-        }
-
-        const unreadRes = await fetch(`${API_BASE_URL}/admin/notifications/unread-count`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const unreadData = await unreadRes.json();
-        if (unreadData.success) {
-          setUnreadCount(unreadData.count || 0);
-        }
-      } catch (e) {
-        console.error("Error fetching notifications:", e);
+      // Notifications
+      if (notificationsRes.status === "fulfilled" && notificationsRes.value.ok) {
+        const d = await notificationsRes.value.json();
+        if (d.success) setNotifications(d.data || []);
       }
 
-      setStats(prev => ({
-        ...prev,
-        totalProducts: productsData.data?.length || 0
-      }));
+      // Unread count
+      if (unreadRes.status === "fulfilled" && unreadRes.value.ok) {
+        const d = await unreadRes.value.json();
+        if (d.success) setUnreadCount(d.count || 0);
+      }
 
-      try {
-        const usersRes = await fetch(`${API_BASE_URL}/admin/users`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const usersData = await usersRes.json();
-        if (usersData.success) {
-          const nonAdminUsers = (usersData.data || []).filter((user) => user.role !== "admin");
+      // Users
+      if (usersRes.status === "fulfilled" && usersRes.value.ok) {
+        const d = await usersRes.value.json();
+        if (d.success) {
+          const nonAdminUsers = (d.data || []).filter(u => u.role !== "admin");
           setUsers(nonAdminUsers);
-          setStats(prev => ({
-            ...prev,
-            totalUsers: nonAdminUsers.length
-          }));
+          setStats(prev => ({ ...prev, totalUsers: nonAdminUsers.length }));
         } else {
           setUsers([]);
-          setStats(prev => ({
-            ...prev,
-            totalUsers: 0
-          }));
+          setStats(prev => ({ ...prev, totalUsers: 0 }));
         }
-      } catch (e) {
-        console.error("Error fetching users:", e.message);
-        setUsers([]);
-        setStats(prev => ({
-          ...prev,
-          totalUsers: 0
-        }));
       }
 
-      try {
-        const couponsRes = await fetch(`${API_BASE_URL}/admin/coupons`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const couponsData = await couponsRes.json();
-        if (couponsData.success) {
-          setCoupons(couponsData.data || []);
-          setStats(prev => ({
-            ...prev,
-            totalCoupons: (couponsData.data || []).filter(c => c.is_active).length
-          }));
+      // Coupons
+      if (couponsRes.status === "fulfilled" && couponsRes.value.ok) {
+        const d = await couponsRes.value.json();
+        if (d.success) {
+          setCoupons(d.data || []);
+          setStats(prev => ({ ...prev, totalCoupons: (d.data || []).filter(c => c.is_active).length }));
         }
-      } catch (e) {
-        console.error("Error fetching coupons:", e);
       }
 
-      try {
-        const adsRes = await fetch(`${API_BASE_URL}/admin/ads`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const adsData = await adsRes.json();
-        if (adsData.success) {
-          setAds(adsData.data || []);
-        }
-      } catch (e) {
-        console.error("Error fetching ads:", e);
+      // Ads
+      if (adsRes.status === "fulfilled" && adsRes.value.ok) {
+        const d = await adsRes.value.json();
+        if (d.success) setAds(d.data || []);
       }
+
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching admin data:", error);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -1447,9 +1471,30 @@ const handleEditProduct = (product) => {
                                 >
                                   Save
                                 </button>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleDeleteOrder(order.id || order._id)}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
+                            title="Delete Order"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {orders.length === 0 && (
+                <div className="p-8 text-center text-gray-600">
+                  No orders found.
+                </div>
+              )}
+            </div>
           </div>
         )}
-
         {/* Coupons Tab */}
         {activeTab === "coupons" && (
           <div className="bg-white rounded-lg shadow">
@@ -1582,27 +1627,6 @@ const handleEditProduct = (product) => {
               {ads.length === 0 && (
                 <div className="p-8 text-center text-gray-600">
                   No ads found. Create your first ad!
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-                          </div>
-                          <button
-                            onClick={() => handleDeleteOrder(order.id || order._id)}
-                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg transition"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {orders.length === 0 && (
-                <div className="p-8 text-center text-gray-600">
-                  No orders found.
                 </div>
               )}
             </div>

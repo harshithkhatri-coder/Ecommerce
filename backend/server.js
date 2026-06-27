@@ -1318,6 +1318,106 @@ app.get("/api/coupon-locks/me", async (req, res) => {
   }
 });
 
+// ===== ADS =====
+app.get("/api/ads/active", async (req, res) => {
+  try {
+    const now = new Date();
+    const activeAds = await Ad.find({
+      is_active: true,
+      $or: [
+        { start_date: null, end_date: null },
+        { start_date: { $lte: now }, end_date: null },
+        { start_date: null, end_date: { $gte: now } },
+        { start_date: { $lte: now }, end_date: { $gte: now } }
+      ]
+    }).sort({ priority: -1, createdAt: -1 });
+    
+    res.json({ success: true, data: activeAds });
+  } catch (err) {
+    console.error("Error fetching active ads:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch active ads" });
+  }
+});
+
+app.get("/api/admin/ads", adminAuth, async (req, res) => {
+  try {
+    const ads = await Ad.find().sort({ priority: -1, createdAt: -1 });
+    res.json({ success: true, data: ads });
+  } catch (err) {
+    console.error("Error fetching admin ads:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch ads" });
+  }
+});
+
+app.post("/api/admin/ads", adminAuth, async (req, res) => {
+  try {
+    const { title, message, image_url, link_url, button_text, display_type, is_active, priority, start_date, end_date, target_audience } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ success: false, message: "Title and message are required" });
+    }
+    const newAd = await Ad.create({
+      title: title.trim(),
+      message: message.trim(),
+      image_url: image_url || "",
+      link_url: link_url || "",
+      button_text: button_text || "Shop Now",
+      display_type: display_type || "banner",
+      is_active: is_active !== false,
+      priority: Number(priority) || 0,
+      start_date: start_date ? new Date(start_date) : null,
+      end_date: end_date ? new Date(end_date) : null,
+      target_audience: target_audience || "all"
+    });
+    res.json({ success: true, data: newAd });
+  } catch (err) {
+    console.error("Error creating ad:", err);
+    res.status(500).json({ success: false, message: "Failed to create ad" });
+  }
+});
+
+app.put("/api/admin/ads/:id", adminAuth, async (req, res) => {
+  try {
+    const { title, message, image_url, link_url, button_text, display_type, is_active, priority, start_date, end_date, target_audience } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ success: false, message: "Title and message are required" });
+    }
+    const updateData = {
+      title: title.trim(),
+      message: message.trim(),
+      image_url: image_url || "",
+      link_url: link_url || "",
+      button_text: button_text || "Shop Now",
+      display_type: display_type || "banner",
+      is_active: is_active !== false,
+      priority: Number(priority) || 0,
+      start_date: start_date ? new Date(start_date) : null,
+      end_date: end_date ? new Date(end_date) : null,
+      target_audience: target_audience || "all"
+    };
+    const updatedAd = await Ad.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    if (!updatedAd) {
+      return res.status(404).json({ success: false, message: "Ad not found" });
+    }
+    res.json({ success: true, data: updatedAd });
+  } catch (err) {
+    console.error("Error updating ad:", err);
+    res.status(500).json({ success: false, message: "Failed to update ad" });
+  }
+});
+
+app.delete("/api/admin/ads/:id", adminAuth, async (req, res) => {
+  try {
+    const deletedAd = await Ad.findByIdAndDelete(req.params.id);
+    if (!deletedAd) {
+      return res.status(404).json({ success: false, message: "Ad not found" });
+    }
+    res.json({ success: true, message: "Ad deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting ad:", err);
+    res.status(500).json({ success: false, message: "Failed to delete ad" });
+  }
+});
+
 // ===== 404 =====
 app.use((req, res) => {
   res.status(404).json({
