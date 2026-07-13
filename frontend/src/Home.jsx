@@ -79,7 +79,7 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, []);
+  }, [PRODUCTS_CACHE_TTL]);
 
   return (
     <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">

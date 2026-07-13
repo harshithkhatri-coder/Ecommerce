@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Package, ShoppingCart, Users, DollarSign, Plus, Edit2, Trash2,
   Eye, X, Home, BarChart3, TrendingUp, Lock, Mail, LogOut, Upload,
-  Bell, CheckCircle, Tag
+  Bell, Tag
 } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
@@ -720,25 +720,6 @@ export default function Admin({ onPageChange, onLogout }) {
     setIsAuthenticated(false);
     setAdminUser(null);
     if (onLogout) onLogout();
-  };
-
-  const markNotificationAsRead = async (notificationId) => {
-    const token = localStorage.getItem("adminToken");
-    try {
-      const response = await fetch(`${API_BASE_URL}/admin/notifications/${notificationId}/read`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        setNotifications(notifications.map(notif =>
-          notif.id === notificationId ? { ...notif, is_read: true } : notif
-        ));
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
-    } catch (error) {
-      console.error("Error marking notification as read:", error);
-    }
   };
 
 const handleAddProduct = () => {
