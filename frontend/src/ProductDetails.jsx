@@ -22,6 +22,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart, u
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [couponLocked, setCouponLocked] = useState(false);
+  const [activeCoupons, setActiveCoupons] = useState([]);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -117,6 +118,29 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart, u
       isMounted = false;
     };
   }, [productId, product?.category]);
+
+  useEffect(() => {
+    if (!showCouponModal) return;
+
+    const fetchActiveCoupons = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/coupons/active`);
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          const eligible = data.data.filter(coupon => {
+            if (!coupon.applicable_product_id) return true;
+            const applicableId = coupon.applicable_product_id._id || coupon.applicable_product_id;
+            return String(applicableId) === String(productId);
+          });
+          setActiveCoupons(eligible);
+        }
+      } catch (err) {
+        console.error("Error fetching active coupons:", err);
+      }
+    };
+
+    fetchActiveCoupons();
+  }, [showCouponModal, productId]);
 
   if (loading) {
     return (
@@ -805,7 +829,7 @@ const handleBuyNowWithCoupon = async () => {
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-4">
               {couponLocked && (
                 <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-3 py-2 rounded-lg text-sm">
                   Your coupon access is locked. Please wait for admin permission to use coupons again.
@@ -828,6 +852,60 @@ const handleBuyNowWithCoupon = async () => {
                   {couponLoading ? "..." : "Apply"}
                 </button>
               </div>
+
+              {activeCoupons.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Available Coupons</h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {activeCoupons.map((coupon) => {
+                      const minOrder = coupon.min_order_value || 0;
+                      const currentOrderTotal = product.price * quantity;
+                      const isEligible = currentOrderTotal >= minOrder;
+
+                      return (
+                        <div
+                          key={coupon._id || coupon.id}
+                          onClick={() => {
+                            if (!couponLocked) {
+                              setCouponCode(coupon.code);
+                              setCouponError("");
+                            }
+                          }}
+                          className={`p-3 border rounded-xl text-left transition cursor-pointer flex flex-col justify-between ${
+                            couponCode === coupon.code
+                              ? "border-gray-800 bg-gray-50"
+                              : "border-gray-200 hover:border-gray-400 hover:bg-gray-50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-gray-800 bg-gray-100 px-2 py-0.5 rounded border border-gray-200 text-sm">
+                              {coupon.code}
+                            </span>
+                            <span className="text-xs font-semibold text-green-600">
+                              {coupon.discount_type === "percentage"
+                                ? `${coupon.discount_value}% OFF`
+                                : `₹${coupon.discount_value} OFF`}
+                            </span>
+                          </div>
+                          
+                          <div className="mt-2 flex items-center justify-between text-xs">
+                            <span className="text-gray-500">
+                              Min purchase: ₹{minOrder}
+                            </span>
+                            {isEligible ? (
+                              <span className="text-green-600 font-medium">Eligible</span>
+                            ) : (
+                              <span className="text-red-500 font-medium">
+                                Buy ₹{minOrder - currentOrderTotal} more to apply
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
