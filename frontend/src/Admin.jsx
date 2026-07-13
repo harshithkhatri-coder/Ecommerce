@@ -51,6 +51,7 @@ export default function Admin({ onPageChange, onLogout }) {
   const [orders, setOrders] = useState([]);
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({});
+  // eslint-disable-next-line no-unused-vars
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [carouselItems, setCarouselItems] = useState(loadCarouselImages());
