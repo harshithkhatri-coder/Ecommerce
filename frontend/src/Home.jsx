@@ -6,7 +6,11 @@ import AdBanner from "./AdBanner";
 import { productsData } from "./productsData";
 
 export default function Home({ cart, onAddToCart, onPageChange, user }) {
-  const [highlightProducts, setHighlightProducts] = useState(() => productsData.slice(0, 3));
+  const [highlightProducts, setHighlightProducts] = useState(() => productsData.slice(0, 8));
+
+  // client-side cache for products to avoid repeated network calls
+  const PRODUCTS_CACHE_KEY = "velux_products_cache";
+  const PRODUCTS_CACHE_TTL = 30 * 1000; // 30s
 
   useEffect(() => {
     let isMounted = true;
@@ -22,7 +26,11 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
         if (response.ok) {
           const data = await response.json();
           if (isMounted && data.success && Array.isArray(data.data) && data.data.length > 0) {
-            setHighlightProducts(data.data.filter(Boolean).slice(0, 3));
+              const items = data.data.filter(Boolean).slice(0, 8);
+              setHighlightProducts(items);
+              try {
+                localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify({ ts: Date.now(), items: data.data }));
+              } catch {}
             clearTimeout(timeoutId);
             return;
           }
@@ -38,7 +46,11 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
         if (isMounted && fallbackResponse.ok) {
           const fallbackData = await fallbackResponse.json();
           if (fallbackData.success && Array.isArray(fallbackData.data) && fallbackData.data.length > 0) {
-            setHighlightProducts(fallbackData.data.filter(Boolean).slice(0, 3));
+            const items = fallbackData.data.filter(Boolean).slice(0, 8);
+            setHighlightProducts(items);
+            try {
+              localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify({ ts: Date.now(), items: fallbackData.data }));
+            } catch {}
           }
         }
       } catch (err) {
@@ -47,6 +59,18 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
         clearTimeout(timeoutId);
       }
     };
+
+    // Try cache first
+    try {
+      const raw = localStorage.getItem(PRODUCTS_CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.ts && Date.now() - parsed.ts < PRODUCTS_CACHE_TTL && Array.isArray(parsed.items) && parsed.items.length > 0) {
+          setHighlightProducts(parsed.items.filter(Boolean).slice(0, 8));
+          return;
+        }
+      }
+    } catch {}
 
     fetchProducts();
 
@@ -74,7 +98,7 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
           collection in the products section.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {highlightProducts.map((product) => (
             <button
               key={product._id || product.id}
@@ -82,7 +106,7 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
               onClick={() => onPageChange("ProductDetails", product._id || product.id)}
               className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition transform hover:-translate-y-1"
             >
-              <div className="relative h-64">
+              <div className="relative h-48 sm:h-56 md:h-64">
                 <img
                   src={resolveImageUrl(product.image_url || product.image)}
                   alt={product.name}

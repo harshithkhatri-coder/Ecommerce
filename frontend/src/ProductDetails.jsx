@@ -341,10 +341,10 @@ const handleBuyNowWithCoupon = async () => {
   };
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
+    <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950 overflow-x-hidden">
       {/* Header */}
         <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-6 px-4 shadow-lg sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto flex items-center gap-4">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-4">
           <button
             onClick={() => onPageChange("Products")}
             className="flex items-center gap-2 hover:bg-white/20 px-3 py-2 rounded-lg transition"
@@ -359,9 +359,9 @@ const handleBuyNowWithCoupon = async () => {
       {/* Product Details */}
       <div className="max-w-6xl mx-auto px-4 py-12">
         {/* Row 1: Image and Product Info side by side */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8 min-w-0">
           {/* Product Image Container */}
-          <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 min-h-64 md:min-h-96">
+          <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 min-h-64 md:min-h-96 min-w-0 overflow-hidden">
             {(() => {
               const images = Array.isArray(product.images) ? product.images : (product.image_url || product.image ? [product.image_url || product.image] : []);
               const videos = Array.isArray(product.videos) ? product.videos : [];
@@ -480,7 +480,7 @@ const handleBuyNowWithCoupon = async () => {
           </div>
 
           {/* Product Details Container */}
-          <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="bg-white rounded-lg shadow-lg p-8 min-w-0 overflow-hidden">
             <div className="flex items-start justify-between mb-3">
               <div>
                 <h1 className="text-2xl md:text-4xl font-bold text-gray-800 mb-2">{product.name}</h1>

@@ -37,7 +37,60 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 const memoryStorage = multer.memoryStorage();
-const memoryUpload = multer({ storage: memoryStorage });
+const PRODUCT_IMAGE_LIMIT = 10;
+const PRODUCT_VIDEO_LIMIT = 2;
+const memoryUpload = multer({
+  storage: memoryStorage,
+  limits: { fileSize: 8 * 1024 * 1024 }
+});
+
+// In-memory caches to reduce DB roundtrips
+const couponCache = new Map(); // key -> { doc, expires }
+const COUPON_CACHE_TTL = 60 * 1000; // 60s
+
+let adsCache = { data: null, expires: 0 };
+const ADS_CACHE_TTL = 30 * 1000; // 30s
+
+function getCachedCoupon(code) {
+  if (!code) return null;
+  const key = String(code).trim().toUpperCase();
+  const entry = couponCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    couponCache.delete(key);
+    return null;
+  }
+  return entry.doc;
+}
+
+function setCachedCoupon(code, doc) {
+  if (!code || !doc) return;
+  const key = String(code).trim().toUpperCase();
+  couponCache.set(key, { doc, expires: Date.now() + COUPON_CACHE_TTL });
+}
+
+const productUpload = memoryUpload.fields([
+  { name: "images", maxCount: PRODUCT_IMAGE_LIMIT },
+  { name: "videos", maxCount: PRODUCT_VIDEO_LIMIT }
+]);
+
+function handleProductUpload(req, res, next) {
+  productUpload(req, res, (err) => {
+    if (!err) return next();
+
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({ success: false, message: "Each image or video must be 8 MB or smaller." });
+      }
+      if (err.code === "LIMIT_UNEXPECTED_FILE") {
+        return res.status(400).json({ success: false, message: `You can upload up to ${PRODUCT_IMAGE_LIMIT} images and ${PRODUCT_VIDEO_LIMIT} videos per product.` });
+      }
+    }
+
+    console.error("Product upload error:", err);
+    return res.status(400).json({ success: false, message: "Unable to process the uploaded product media." });
+  });
+}
 
 function fileToBase64(file) {
   if (!file || !file.buffer) return null;
@@ -157,6 +210,19 @@ const couponSchema = new mongoose.Schema({
   usage_limit_per_user: { type: Number, default: 1 },
   total_used: { type: Number, default: 0 }
 });
+// Ensure codes are normalized and indexed for fast lookups
+couponSchema.pre('save', function (next) {
+  if (this.code) this.code = String(this.code).trim().toUpperCase();
+  next();
+});
+couponSchema.index({ code: 1 });
+// Clear cache when coupons change
+couponSchema.post('save', function(doc) {
+  try { couponCache.delete(String(doc.code).trim().toUpperCase()); } catch (e) {}
+});
+couponSchema.post('remove', function(doc) {
+  try { couponCache.delete(String(doc.code).trim().toUpperCase()); } catch (e) {}
+});
 const Coupon = mongoose.model("Coupon", couponSchema);
 
 const couponUsageSchema = new mongoose.Schema({
@@ -172,6 +238,7 @@ const couponLockSchema = new mongoose.Schema({
   last_coupon_used: { type: String, default: "" },
   locked_at: { type: Date, default: null }
 });
+couponLockSchema.index({ user_id: 1 });
 const CouponLock = mongoose.model("CouponLock", couponLockSchema);
 
 const adSchema = new mongoose.Schema({
@@ -187,6 +254,8 @@ const adSchema = new mongoose.Schema({
   end_date: { type: Date, default: null },
   target_audience: { type: String, enum: ["all", "new_users", "returning"], default: "all" }
 }, { timestamps: true });
+// useful index to speed up active/date-range queries
+adSchema.index({ is_active: 1, start_date: 1, end_date: 1, priority: -1 });
 const Ad = mongoose.model("Ad", adSchema);
 
 const DEFAULT_COUPONS = [
@@ -259,11 +328,12 @@ async function validateCouponForUser({ code, subtotal, cartItems, userId }) {
     return { status: 401, body: { success: false, message: "Please login to use coupons" } };
   }
 
-  const coupon = await Coupon.findOne({ code: normalizedCode, is_active: true });
+  const coupon = await Coupon.findOne({ code: normalizedCode, is_active: true }).lean();
   if (!coupon) {
     return { status: 404, body: { success: false, message: "Invalid coupon code" } };
   }
 
+  // product applicability check
   if (coupon.applicable_product_id) {
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       return { status: 400, body: { success: false, message: "Cart is empty" } };
@@ -282,12 +352,32 @@ async function validateCouponForUser({ code, subtotal, cartItems, userId }) {
     return { status: 400, body: { success: false, message: `Minimum order value of ₹${minOrderValue} required` } };
   }
 
-  if (coupon.target_audience === "new_users_only") {
-    const existingOrders = await Order.countDocuments({ user_id: userIdentifier });
-    if (existingOrders > 0) {
-      return { status: 403, body: { success: false, message: "This coupon is only for new users (first order)." } };
-    }
-  } else if (coupon.target_audience === "specific_users") {
+  if (!userIdentifier) {
+    return { status: 401, body: { success: false, message: "Please login to use coupons" } };
+  }
+
+  // Run independent DB checks in parallel to reduce latency
+  const existingOrdersPromise = coupon.target_audience === "new_users_only"
+    ? Order.countDocuments({ user_id: userIdentifier })
+    : Promise.resolve(0);
+
+  const userUsageCountPromise = coupon.usage_limit_per_user > 0
+    ? CouponUsage.countDocuments({ coupon_id: String(coupon._id), user_id: userIdentifier })
+    : Promise.resolve(0);
+
+  const couponLockPromise = CouponLock.findOne({ user_id: userIdentifier }).lean();
+
+  const [existingOrders, userUsageCount, couponLock] = await Promise.all([
+    existingOrdersPromise,
+    userUsageCountPromise,
+    couponLockPromise
+  ]);
+
+  if (coupon.target_audience === "new_users_only" && existingOrders > 0) {
+    return { status: 403, body: { success: false, message: "This coupon is only for new users (first order)." } };
+  }
+
+  if (coupon.target_audience === "specific_users") {
     const allowedIds = (coupon.allowed_user_ids || []).map(id => String(id).trim()).filter(Boolean);
     if (allowedIds.length === 0 || !allowedIds.includes(userIdentifier)) {
       return { status: 403, body: { success: false, message: "You are not eligible for this coupon." } };
@@ -298,17 +388,10 @@ async function validateCouponForUser({ code, subtotal, cartItems, userId }) {
     return { status: 403, body: { success: false, message: "This coupon usage limit has been reached." } };
   }
 
-  if (coupon.usage_limit_per_user > 0) {
-    const userUsageCount = await CouponUsage.countDocuments({
-      coupon_id: String(coupon._id),
-      user_id: userIdentifier
-    });
-    if (userUsageCount >= coupon.usage_limit_per_user) {
-      return { status: 403, body: { success: false, message: "You have already used this coupon the maximum number of times." } };
-    }
+  if (coupon.usage_limit_per_user > 0 && userUsageCount >= coupon.usage_limit_per_user) {
+    return { status: 403, body: { success: false, message: "You have already used this coupon the maximum number of times." } };
   }
 
-  const couponLock = await CouponLock.findOne({ user_id: userIdentifier });
   if (couponLock && couponLock.locked) {
     return {
       status: 403,
@@ -524,98 +607,20 @@ app.get("/api/coupons/active", async (req, res) => {
 });
 
 app.post("/api/coupons/validate", async (req, res) => {
-  const { code, subtotal, cartItems, userId } = req.body;
-  const normalizedCode = (code || "").trim().toUpperCase();
-
-  if (!normalizedCode) {
-    return res.status(400).json({ success: false, message: "Coupon code is required" });
-  }
-
   try {
     const authUser = await getAuthenticatedUser(req);
-    let coupon = await Coupon.findOne({ code: normalizedCode, is_active: true });
-    if (!coupon) return res.status(404).json({ success: false, message: "Invalid coupon code" });
+    const payload = {
+      code: req.body.code,
+      subtotal: req.body.subtotal,
+      cartItems: req.body.cartItems,
+      userId: authUser?._id || req.body.userId
+    };
 
-    if (coupon.applicable_product_id) {
-      if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
-        return res.status(400).json({ success: false, message: "Cart is empty" });
-      }
-      const hasProduct = cartItems.some(item =>
-        String(item.product_id || item._id || item.id) === String(coupon.applicable_product_id)
-      );
-      if (!hasProduct) return res.status(400).json({ success: false, message: "This coupon is only applicable for a specific product." });
-    }
-
-    const minOrderValue = coupon.min_order_value || 0;
-    if (subtotal < minOrderValue) return res.status(400).json({ success: false, message: `Minimum order value of ₹${minOrderValue} required` });
-
-    const userIdentifier = String(authUser?._id || userId || "").trim();
-    if (!userIdentifier) {
-      return res.status(401).json({ success: false, message: "Please login to use coupons" });
-    }
-
-    if (coupon.target_audience === "new_users_only") {
-      const existingOrders = await Order.countDocuments({ user_id: userIdentifier });
-      if (existingOrders > 0) {
-        return res.status(403).json({ success: false, message: "This coupon is only for new users (first order)." });
-      }
-    } else if (coupon.target_audience === "specific_users") {
-      const allowedIds = (coupon.allowed_user_ids || []).map(id => String(id).trim()).filter(Boolean);
-      if (allowedIds.length === 0 || !allowedIds.includes(userIdentifier)) {
-        return res.status(403).json({ success: false, message: "You are not eligible for this coupon." });
-      }
-    }
-
-    if (coupon.usage_limit > 0 && (coupon.total_used || 0) >= coupon.usage_limit) {
-      return res.status(403).json({ success: false, message: "This coupon usage limit has been reached." });
-    }
-
-    if (coupon.usage_limit_per_user > 0) {
-      const userUsageCount = await CouponUsage.countDocuments({
-        coupon_id: String(coupon._id),
-        user_id: userIdentifier
-      });
-      if (userUsageCount >= coupon.usage_limit_per_user) {
-        return res.status(403).json({ success: false, message: "You have already used this coupon the maximum number of times." });
-      }
-    }
-
-    const couponLock = await CouponLock.findOne({ user_id: userIdentifier });
-    if (couponLock && couponLock.locked) {
-      return res.status(403).json({
-        success: false,
-        message: "You have used a coupon recently. Please wait for admin permission to use another coupon.",
-        coupon_locked: true
-      });
-    }
-
-    let discountAmount = 0;
-    if (coupon.discount_type === "percentage") {
-      discountAmount = Math.round((subtotal * coupon.discount_value) / 100);
-      if (coupon.max_discount && discountAmount > coupon.max_discount) discountAmount = coupon.max_discount;
-    } else {
-      discountAmount = coupon.discount_value;
-    }
-    discountAmount = Math.min(discountAmount, subtotal);
-
-    res.json({
-      success: true,
-      data: {
-        code: coupon.code,
-        discount_type: coupon.discount_type,
-        discount_value: coupon.discount_value,
-        discount_amount: discountAmount,
-        min_order_value: coupon.min_order_value,
-        max_discount: coupon.max_discount,
-        target_audience: coupon.target_audience,
-        usage_limit: coupon.usage_limit,
-        usage_limit_per_user: coupon.usage_limit_per_user,
-        total_used: coupon.total_used || 0
-      }
-    });
+    const result = await validateCouponForUser(payload);
+    return res.status(result.status).json(result.body);
   } catch (err) {
     console.error("Coupon validation error:", err);
-    res.status(500).json({ success: false, message: "Failed to validate coupon" });
+    return res.status(500).json({ success: false, message: "Failed to validate coupon" });
   }
 });
 
@@ -912,12 +917,7 @@ app.get("/api/admin/products", adminAuth, async (req, res) => {
   }
 });
 
-app.post("/api/admin/products", adminAuth, (req, res, next) => {
-  memoryUpload.fields([
-    { name: 'images', maxCount: 5 },
-    { name: 'videos', maxCount: 5 }
-  ])(req, res, next);
-}, async (req, res) => {
+app.post("/api/admin/products", adminAuth, handleProductUpload, async (req, res) => {
   try {
     const { name, price, original_price, category, stock, description, image_url, offer, is_featured } = req.body;
     let imageUrl = image_url || "";
@@ -954,16 +954,14 @@ app.post("/api/admin/products", adminAuth, (req, res, next) => {
     });
     res.json({ success: true, data: product });
   } catch (err) {
+    console.error("Product create error:", err);
     res.status(500).json({ success: false, message: "Failed to create product" });
   }
 });
 
 app.put("/api/admin/products/:id", adminAuth, (req, res, next) => {
   if (req.headers['content-type']?.includes('multipart/form-data')) {
-    memoryUpload.fields([
-      { name: 'images', maxCount: 5 },
-      { name: 'videos', maxCount: 5 }
-    ])(req, res, next);
+    return handleProductUpload(req, res, next);
   } else {
     next();
   }
@@ -1330,16 +1328,22 @@ app.get("/api/coupon-locks/me", async (req, res) => {
 app.get("/api/ads/active", async (req, res) => {
   try {
     const now = new Date();
+    // serve from in-memory cache when fresh
+    if (adsCache.data && Date.now() < adsCache.expires) {
+      return res.json({ success: true, data: adsCache.data });
+    }
+
     const activeAds = await Ad.find({
-      is_active: true,
-      $or: [
-        { start_date: null, end_date: null },
-        { start_date: { $lte: now }, end_date: null },
-        { start_date: null, end_date: { $gte: now } },
-        { start_date: { $lte: now }, end_date: { $gte: now } }
-      ]
-    }).sort({ priority: -1, createdAt: -1 });
-    
+        is_active: true,
+        $or: [
+          { start_date: null, end_date: null },
+          { start_date: { $lte: now }, end_date: null },
+          { start_date: null, end_date: { $gte: now } },
+          { start_date: { $lte: now }, end_date: { $gte: now } }
+        ]
+      }).sort({ priority: -1, createdAt: -1 }).lean();
+
+    adsCache = { data: activeAds, expires: Date.now() + ADS_CACHE_TTL };
     res.json({ success: true, data: activeAds });
   } catch (err) {
     console.error("Error fetching active ads:", err);
@@ -1376,6 +1380,8 @@ app.post("/api/admin/ads", adminAuth, async (req, res) => {
       end_date: end_date ? new Date(end_date) : null,
       target_audience: target_audience || "all"
     });
+    // invalidate ads cache
+    adsCache.expires = 0;
     res.json({ success: true, data: newAd });
   } catch (err) {
     console.error("Error creating ad:", err);
@@ -1406,6 +1412,7 @@ app.put("/api/admin/ads/:id", adminAuth, async (req, res) => {
     if (!updatedAd) {
       return res.status(404).json({ success: false, message: "Ad not found" });
     }
+    adsCache.expires = 0;
     res.json({ success: true, data: updatedAd });
   } catch (err) {
     console.error("Error updating ad:", err);
@@ -1419,6 +1426,7 @@ app.delete("/api/admin/ads/:id", adminAuth, async (req, res) => {
     if (!deletedAd) {
       return res.status(404).json({ success: false, message: "Ad not found" });
     }
+    adsCache.expires = 0;
     res.json({ success: true, message: "Ad deleted successfully" });
   } catch (err) {
     console.error("Error deleting ad:", err);

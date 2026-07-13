@@ -5,7 +5,17 @@ import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
 
 export default function Products({ onAddToCart, onPageChange }) {
-  const [displayed, setDisplayed] = useState(12);
+  // choose initial displayed count based on screen width for better UX on mobile
+  const getInitialDisplayed = () => {
+    if (typeof window !== 'undefined') {
+      const w = window.innerWidth;
+      if (w < 640) return 8; // mobile
+      if (w < 1024) return 12; // tablet
+      return 24; // desktop
+    }
+    return 12;
+  };
+  const [displayed, setDisplayed] = useState(getInitialDisplayed);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -42,6 +52,9 @@ export default function Products({ onAddToCart, onPageChange }) {
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         // Use API data only if it is not empty to ensure products are shown.
         setProducts(data.data.filter(Boolean));
+        try {
+          localStorage.setItem('velux_products_cache', JSON.stringify({ ts: Date.now(), items: data.data }));
+        } catch {}
       }
     } catch (err) {
       clearTimeout(timeoutId);
@@ -50,6 +63,22 @@ export default function Products({ onAddToCart, onPageChange }) {
       setLoading(false);
     }
   };
+  // hydrate from cache if available and fresh
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('velux_products_cache');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.ts && Date.now() - parsed.ts < 30 * 1000 && Array.isArray(parsed.items) && parsed.items.length > 0) {
+          setProducts(parsed.items.filter(Boolean));
+          return;
+        }
+      }
+    } catch {}
+    // otherwise fetch
+    fetchProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const fetchWishlist = async () => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (!user) return;
@@ -254,7 +283,7 @@ export default function Products({ onAddToCart, onPageChange }) {
                       alt={product.name}
                       loading="lazy"
                       decoding="async"
-                      className="w-full h-full object-contain bg-slate-100 hover:scale-105 transition-transform duration-500"
+                      className="w-full h-full object-cover bg-slate-100 hover:scale-105 transition-transform duration-500"
                     />
                      <div className="absolute top-2 right-2 bg-gray-600 text-white px-2 py-1 rounded text-xs font-semibold">
                       {product.category}
