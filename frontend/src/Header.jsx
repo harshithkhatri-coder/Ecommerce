@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ShoppingCart, User, Search, Menu, X } from "lucide-react";
+import { ShoppingCart, User, Search, Menu, X, Moon, Sun, Mic, LogOut } from "lucide-react";
 
 const ADMIN_LOGIN_EMAIL = "admin@veluxkicks.com";
 
@@ -9,79 +9,171 @@ function isAdminUser(user) {
   return user.role === "admin" || email === ADMIN_LOGIN_EMAIL;
 }
 
-export default function Header({ currentPage, onPageChange, cartCount, user, onLogout }) {
+export default function Header({ currentPage, onPageChange, cartCount, user, onLogout, theme, onToggleTheme }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleVoiceSearch = () => {
+    if (typeof window === "undefined") return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice search is not supported in this browser.");
+      return;
+    }
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          onPageChange("Search", transcript);
+        }
+      };
+      recognition.start();
+    } catch (err) {
+      console.error("Voice search error:", err);
+    }
+  };
 
   const baseNavItems = ["Home", "Products", "About"];
   const navItems = isAdminUser(user) ? [...baseNavItems, "Admin"] : baseNavItems;
 
+  const isNavActive = (page) => {
+    if (page === "Products") {
+      return currentPage === "Products" || currentPage === "ProductDetails";
+    }
+    return currentPage === page;
+  };
+
   return (
-    <header className="bg-gray-950 text-white shadow-lg sticky top-0 z-50">
+    <header className="bg-gray-950/95 backdrop-blur-md text-white shadow-xl sticky top-0 z-50 border-b border-gray-800/70 transition-colors duration-300">
       <div className="px-4 md:px-6 py-3 flex justify-between items-center gap-4">
         {/* Logo and Navigation */}
         <div className="flex items-center gap-4 md:gap-8">
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onPageChange("Home")}
+            className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
+          >
             <img
               src={require('./images/Logo.jpg')}
               alt="VELUX KICKS Logo"
-              className="w-10 h-10 rounded-full border-2 border-white object-cover"
+              className="w-10 h-10 rounded-full border-2 border-orange-500/80 object-cover group-hover:scale-105 group-hover:border-orange-400 transition-all duration-300 shadow-md shadow-orange-500/20"
             />
-            <span className="text-lg font-bold hidden sm:inline">VELUX KICKS</span>
-          </div>
+            <span className="text-lg font-extrabold tracking-wide hidden sm:inline bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent group-hover:from-orange-400 group-hover:to-amber-300 transition-all duration-300">
+              VELUX KICKS
+            </span>
+          </button>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex gap-4">
-            {navItems.map((page) => (
-              <button
-                key={page}
-                onClick={() => onPageChange(page)}
-                className={`font-semibold text-sm transition px-3 py-2 rounded ${
-                  currentPage === page
-                    ? "bg-white text-black"
-                    : "text-white hover:bg-gray-700"
-                }`}
-              >
-                {page}
-              </button>
-            ))}
+          <nav className="hidden md:flex items-center gap-1.5 bg-gray-900/80 p-1.5 rounded-2xl border border-gray-800/80">
+            {navItems.map((page) => {
+              const active = isNavActive(page);
+              return (
+                <button
+                  key={page}
+                  onClick={() => onPageChange(page)}
+                  className={`font-semibold text-sm transition-all duration-300 px-4 py-2 rounded-xl flex items-center gap-2 relative ${
+                    active
+                      ? "bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white shadow-lg shadow-orange-500/30 scale-[1.02] font-bold"
+                      : "text-gray-300 hover:text-white hover:bg-white/10 active:scale-95"
+                  }`}
+                >
+                  <span>{page}</span>
+                  {active && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  )}
+                </button>
+              );
+            })}
           </nav>
         </div>
 
         {/* Right Side - Search, Cart and Profile */}
-        <div className="flex items-center gap-2 md:gap-4">
-            <button
-            onClick={() => onPageChange("Search")}
-            className="hidden sm:flex items-center gap-2 bg-gray-700 px-3 md:px-4 py-2 rounded-lg cursor-pointer hover:bg-gray-600 transition font-semibold"
+        <div className="flex items-center gap-2 md:gap-3">
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            className="theme-toggle rounded-xl p-2.5 transition-all duration-300 hover:scale-110 active:scale-95"
           >
-            <Search size={20} />
+            {theme === "dark" ? <Sun size={19} className="text-amber-400" /> : <Moon size={19} className="text-indigo-300" />}
+          </button>
+
+          <button
+            onClick={() => onPageChange("Search")}
+            className={`hidden sm:flex items-center gap-2 px-3.5 md:px-4 py-2 rounded-xl cursor-pointer transition-all duration-300 font-semibold text-sm border ${
+              currentPage === "Search"
+                ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/20 scale-[1.02]"
+                : "bg-gray-900/80 text-gray-200 border-gray-800 hover:bg-gray-800 hover:border-gray-700 hover:text-white active:scale-95"
+            }`}
+          >
+            <Search size={18} />
             <span>Search</span>
           </button>
+
+          <button
+            type="button"
+            onClick={handleVoiceSearch}
+            title="Search by voice"
+            className="hidden sm:flex items-center justify-center p-2 rounded-xl border border-gray-800 bg-gray-900/80 text-gray-300 hover:text-orange-400 hover:border-orange-500/50 hover:bg-gray-800 transition-all duration-300 active:scale-95"
+          >
+            <Mic size={18} />
+          </button>
+
           <button
             onClick={() => onPageChange("Cart")}
-            className="flex items-center gap-2 bg-gray-700 px-3 md:px-4 py-2 rounded-lg cursor-pointer hover:bg-gray-600 transition font-semibold"
+            className={`flex items-center gap-2 px-3.5 md:px-4 py-2 rounded-xl cursor-pointer transition-all duration-300 font-semibold text-sm border relative ${
+              currentPage === "Cart"
+                ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/20 scale-[1.02]"
+                : "bg-gray-900/80 text-gray-200 border-gray-800 hover:bg-gray-800 hover:border-gray-700 hover:text-white active:scale-95"
+            }`}
           >
-            <ShoppingCart size={20} />
-            <span className="hidden sm:inline">{cartCount}</span>
-            <span className="sm:hidden">{cartCount}</span>
+            <ShoppingCart size={18} />
+            <span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full font-extrabold ml-0.5 shadow-sm">
+              {cartCount}
+            </span>
           </button>
           
           {user ? (
             <div className="flex items-center gap-2 md:gap-3">
               <button
                 onClick={() => onPageChange("Profile")}
-                className="flex items-center gap-2 text-white hover:text-gray-200 transition"
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all duration-300 font-semibold text-sm border ${
+                  currentPage === "Profile"
+                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/20 scale-[1.02]"
+                    : "bg-gray-900/80 text-gray-200 border-gray-800 hover:bg-gray-800 hover:border-gray-700 hover:text-white active:scale-95"
+                }`}
               >
-                <User size={20} />
-                <span className="hidden sm:inline font-semibold">{user.name}</span>
+                {user.avatar ? (
+                  <img src={user.avatar} alt={user.name || "User"} className="w-5 h-5 rounded-full object-cover border border-orange-400" />
+                ) : (
+                  <User size={18} />
+                )}
+                <span className="hidden sm:inline">{user.name}</span>
               </button>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  title="Logout"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-300 font-semibold text-sm border bg-red-950/60 text-red-300 border-red-800/60 hover:bg-red-900/80 hover:text-white active:scale-95 shadow-sm cursor-pointer"
+                >
+                  <LogOut size={16} />
+                  <span className="hidden md:inline">Logout</span>
+                </button>
+              )}
             </div>
           ) : (
             <button
               onClick={() => onPageChange("Login")}
-              className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 px-4 py-2 rounded-lg hover:shadow-lg transition font-semibold"
+              className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-semibold text-sm border ${
+                currentPage === "Login"
+                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/20 scale-[1.02]"
+                  : "bg-gradient-to-r from-gray-800 to-gray-900 text-white border-gray-700 hover:from-gray-700 hover:to-gray-800 active:scale-95 shadow-md"
+              }`}
             >
-              <User size={20} />
+              <User size={18} />
               <span>Login</span>
             </button>
           )}
@@ -89,51 +181,80 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
           {/* Mobile Menu Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden flex items-center justify-center p-2 rounded-lg hover:bg-gray-700 transition"
+            className="md:hidden flex items-center justify-center p-2.5 rounded-xl bg-gray-900 border border-gray-800 text-gray-200 hover:text-white hover:bg-gray-800 transition-all duration-200"
           >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
       </div>
 
       {/* Mobile Navigation Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-800">
-          <nav className="flex flex-col py-2">
-            {navItems.map((page) => (
-              <button
-                key={page}
-                onClick={() => {
-                  onPageChange(page);
-                  setMobileMenuOpen(false);
-                }}
-                className={`font-semibold text-sm transition px-4 py-3 text-left ${
-                  currentPage === page
-                    ? "bg-white text-black"
-                    : "text-white hover:bg-gray-700"
-                }`}
-              >
-                {page}
-              </button>
-            ))}            <button
+        <div className="md:hidden border-t border-gray-800/80 bg-gray-950/95 backdrop-blur-lg px-3 py-3 space-y-1.5 shadow-2xl">
+          <nav className="flex flex-col gap-1.5">
+            {navItems.map((page) => {
+              const active = isNavActive(page);
+              return (
+                <button
+                  key={page}
+                  onClick={() => {
+                    onPageChange(page);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`font-semibold text-sm transition-all duration-200 px-4 py-3 rounded-xl text-left flex items-center justify-between ${
+                    active
+                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-md shadow-orange-500/25"
+                      : "text-gray-300 hover:bg-gray-900 hover:text-white"
+                  }`}
+                >
+                  <span>{page}</span>
+                  {active && <span className="w-2 h-2 rounded-full bg-white animate-pulse" />}
+                </button>
+              );
+            })}
+
+            <button
               onClick={() => {
                 onPageChange("Search");
                 setMobileMenuOpen(false);
               }}
-              className="font-semibold text-sm transition px-4 py-3 text-left text-white hover:bg-gray-800 flex items-center gap-2"
+              className={`font-semibold text-sm transition-all duration-200 px-4 py-3 rounded-xl text-left flex items-center gap-2.5 ${
+                currentPage === "Search"
+                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-md shadow-orange-500/25"
+                  : "text-gray-300 hover:bg-gray-900 hover:text-white"
+              }`}
             >
               <Search size={18} />
-              Search
-            </button>            {!user && (
+              <span>Search</span>
+            </button>
+
+            {user ? (
+              onLogout && (
+                <button
+                  onClick={() => {
+                    onLogout();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="font-semibold text-sm transition-all duration-200 px-4 py-3 rounded-xl text-left flex items-center gap-2.5 text-red-400 hover:bg-red-950/40 hover:text-red-300"
+                >
+                  <LogOut size={18} />
+                  <span>Logout</span>
+                </button>
+              )
+            ) : (
               <button
                 onClick={() => {
                   onPageChange("Login");
                   setMobileMenuOpen(false);
                 }}
-              className="font-semibold text-sm transition px-4 py-3 text-left text-white hover:bg-gray-700 flex items-center gap-2"
+                className={`font-semibold text-sm transition-all duration-200 px-4 py-3 rounded-xl text-left flex items-center gap-2.5 ${
+                  currentPage === "Login"
+                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-md shadow-orange-500/25"
+                    : "text-gray-300 hover:bg-gray-900 hover:text-white"
+                }`}
               >
                 <User size={18} />
-                Login
+                <span>Login</span>
               </button>
             )}
           </nav>

@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: dark;
+  --page-bg: #09090b;
+  --surface: #18181b;
+  --surface-raised: #27272a;
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  --accent: #f97316;
+  --ring: rgba(249, 115, 22, .45);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page-bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-raised: #f1f5f9;
+  --text: #18181b;
+  --muted: #52525b;
+  --accent: #ea580c;
+  --ring: rgba(234, 88, 12, .32);
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--page-bg);
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -9,9 +36,302 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+button, a, input, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: radial-gradient(circle at top left, rgba(249, 115, 22, .12), transparent 30rem), var(--page-bg);
+  transition: background-color .25s ease, color .25s ease;
+}
+
+.theme-light .bg-gray-950,
+.theme-light .bg-gray-900,
+.theme-light .bg-black {
+  background-color: #f8fafc !important;
+  background-image: none !important;
+  color: #0f172a !important;
+}
+
+.theme-light .text-white:not(button):not(.bg-orange-500):not(.bg-amber-500):not(.bg-gradient-to-r):not(.bg-gray-800) {
+  color: #0f172a !important;
+}
+
+.theme-light .text-gray-200, 
+.theme-light .text-gray-300 {
+  color: #475569 !important;
+}
+
+.theme-light .border-gray-800 {
+  border-color: #e2e8f0 !important;
+}
+
+.theme-light .bg-gray-800 {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.theme-toggle {
+  color: #fbbf24;
+  background: rgba(255,255,255,.1);
+}
+.theme-toggle:hover { transform: rotate(12deg) scale(1.06); background: rgba(255,255,255,.18); }
+
+.page-transition { animation: page-enter .32s ease-out both; }
+.fade-up { animation: fade-up .45s ease-out both; }
+.product-card { content-visibility: auto; contain-intrinsic-size: 390px; }
+.product-card img { transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .3s ease; }
+.product-card:hover img { transform: scale(1.06); filter: saturate(1.07); }
+.cart-panel { animation: slide-in-right .36s cubic-bezier(.2,.8,.2,1) both; }
+.cart-success { animation: success-pop .5s cubic-bezier(.2,.9,.3,1) both; }
+.add-to-cart-button:active { transform: scale(.96); }
+
+/* Animated Banner Keyframes & Styling */
+@keyframes gradient-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes title-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes float-orbs {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-12px) scale(1.08); }
+}
+
+.animated-products-banner {
+  background: linear-gradient(-45deg, #09090b, #18181b, #27272a, #1c1917, #09090b);
+  background-size: 300% 300%;
+  animation: gradient-flow 10s ease infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+.animated-banner-title {
+  background: linear-gradient(90deg, #ffffff 0%, #f97316 35%, #fbbf24 65%, #ffffff 100%);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: title-shimmer 5s linear infinite;
+}
+
+.skeleton {
+  background: linear-gradient(100deg, rgba(148,163,184,.16) 25%, rgba(255,255,255,.28) 40%, rgba(148,163,184,.16) 55%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite linear;
+}
+
+@keyframes page-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes shimmer { to { background-position-x: -200%; } }
+@keyframes slide-in-right { from { opacity: 0; transform: translateX(22px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes success-pop { 0% { opacity: 0; transform: scale(.85); } 70% { transform: scale(1.04); } 100% { opacity: 1; transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+
+@media (max-width: 640px) {
+  .product-card { contain-intrinsic-size: 330px; }
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* ==========================================================================
+   THEME STABILITY OVERRIDES
+   Ensures cards, modals, and input fields adapt cleanly to the active theme.
+   ========================================================================== */
+
+/* Configure theme-specific local variables for form elements */
+.theme-dark {
+  --modal-bg: var(--surface);
+  --modal-text: var(--text);
+  --modal-border: var(--surface-raised);
+  --input-bg: var(--surface-raised);
+  --input-text: var(--text);
+  --input-border: #4b5563; /* Gray-600 border for input contrast */
+  --input-focus-border: var(--accent);
+}
+
+.theme-light {
+  --modal-bg: #ffffff;
+  --modal-text: #18181b;
+  --modal-border: #e4e4e7;
+  --input-bg: #ffffff;
+  --input-text: #18181b;
+  --input-border: #cbd5e1; /* Gray-300 border for light mode */
+  --input-focus-border: var(--accent);
+}
+
+/* Force hardcoded light classes to adapt to dark theme when active */
+.theme-dark .bg-white {
+  background-color: var(--surface) !important;
+}
+
+.theme-dark .text-gray-800,
+.theme-dark .text-gray-700,
+.theme-dark .text-gray-600 {
+  color: var(--text) !important;
+}
+
+.theme-dark .border-gray-200,
+.theme-dark .border-gray-300 {
+  border-color: var(--surface-raised) !important;
+}
+
+.theme-dark .bg-gray-50,
+.theme-dark .bg-gray-100 {
+  background-color: var(--surface-raised) !important;
+  color: var(--text) !important;
+}
+
+.theme-dark .text-gray-500 {
+  color: var(--muted) !important;
+}
+
+/* Style input, textarea, select controls explicitly for both themes */
+.app-shell input:not([type="checkbox"]):not([type="radio"]),
+.app-shell textarea,
+.app-shell select {
+  background-color: var(--input-bg, var(--surface-raised)) !important;
+  color: var(--input-text, var(--text)) !important;
+  border: 1px solid var(--input-border, var(--muted)) !important;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.app-shell input:not([type="checkbox"]):not([type="radio"]):focus,
+.app-shell textarea:focus,
+.app-shell select:focus {
+  border-color: var(--input-focus-border, var(--accent)) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px var(--ring) !important;
+}
+
+/* Datalist styling helpers */
+.app-shell datalist {
+  background-color: var(--input-bg);
+  color: var(--input-text);
+}
+
+/* ==========================================================================
+   ANIMATED TABLE ROW & HOVER STATES
+   Prevents white-out text issues in Dark Mode and adds smooth micro-animations.
+   ========================================================================== */
+
+/* Table rows and list items smooth transition */
+.app-shell tr,
+.app-shell .hover\:bg-gray-50,
+.app-shell .hover\:bg-gray-100 {
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.2s ease,
+              transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s ease !important;
+}
+
+/* Dark Mode Hover Overrides */
+.theme-dark tr:hover,
+.theme-dark .hover\:bg-gray-50:hover,
+.theme-dark .hover\:bg-gray-100:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+  box-shadow: inset 4px 0 0 var(--accent, #f97316) !important;
+}
+
+.theme-dark tr:hover td,
+.theme-dark tr:hover th,
+.theme-dark tr:hover td span:not(.stock-badge),
+.theme-dark tr:hover td div:not(.stock-badge) {
+  color: #ffffff !important;
+}
+
+.theme-dark .bg-gray-100.hover\:bg-gray-200:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+/* Light Mode Hover Overrides */
+.theme-light tr:hover,
+.theme-light .hover\:bg-gray-50:hover,
+.theme-light .hover\:bg-gray-100:hover {
+  background-color: #f1f5f9 !important;
+  color: #09090b !important;
+  box-shadow: inset 4px 0 0 var(--accent, #ea580c) !important;
+}
+
+.theme-light tr:hover td,
+.theme-light tr:hover th {
+  color: #09090b !important;
+}
+
+/* Stock badge styling - preserve contrast in dark & light themes */
+.app-shell .stock-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.theme-dark .stock-badge.bg-emerald-500\/20,
+.theme-dark tr:hover td span.stock-badge.bg-emerald-500\/20 {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+  color: #6ee7b7 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+.theme-dark .stock-badge.bg-amber-500\/20,
+.theme-dark tr:hover td span.stock-badge.bg-amber-500\/20 {
+  background-color: rgba(245, 158, 11, 0.2) !important;
+  color: #fcd34d !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+}
+
+.theme-dark .stock-badge.bg-red-500\/20,
+.theme-dark tr:hover td span.stock-badge.bg-red-500\/20 {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+}
+
+.theme-light .stock-badge.bg-emerald-500\/20,
+.theme-light tr:hover td span.stock-badge.bg-emerald-500\/20 {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+  border-color: #a7f3d0 !important;
+}
+
+.theme-light .stock-badge.bg-amber-500\/20,
+.theme-light tr:hover td span.stock-badge.bg-amber-500\/20 {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #fde68a !important;
+}
+
+.theme-light .stock-badge.bg-red-500\/20,
+.theme-light tr:hover td span.stock-badge.bg-red-500\/20 {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
+  border-color: #fca5a5 !important;
+}
+
+

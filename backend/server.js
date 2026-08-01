@@ -137,6 +137,7 @@ const userSchema = new mongoose.Schema({
   zip_code: { type: String, default: "" },
   country: { type: String, default: "" },
   role: { type: String, default: "user" },
+  avatar: { type: String, default: "" },
   created_at: { type: Date, default: Date.now },
   reset_token_hash: { type: String, default: "" },
   reset_token_expires: { type: Date, default: null }
@@ -154,8 +155,9 @@ const productSchema = new mongoose.Schema({
   images: [String],
   videos: [String],
   is_featured: { type: Boolean, default: false },
-  offer: { type: String, default: "" }
-});
+  offer: { type: String, default: "" },
+  sizes: { type: mongoose.Schema.Types.Mixed, default: ["7", "8", "9", "10", "11", "12"] }
+}, { strict: false });
 const Product = mongoose.model("Product", productSchema);
 
 const orderSchema = new mongoose.Schema({
@@ -174,6 +176,7 @@ const orderSchema = new mongoose.Schema({
   address: { type: String, default: "" },
   status: { type: String, default: "Pending" },
   payment_method: { type: String, default: "Prepaid" },
+  payment_status: { type: String, enum: ["Paid", "Unpaid"], default: "Paid" },
   tracking_location: { type: String, default: "" },
   cancellation_reason: { type: String, default: "" },
   created_at: { type: Date, default: Date.now }
@@ -215,7 +218,6 @@ couponSchema.pre('save', function (next) {
   if (this.code) this.code = String(this.code).trim().toUpperCase();
   next();
 });
-couponSchema.index({ code: 1 });
 // Clear cache when coupons change
 couponSchema.post('save', function(doc) {
   try { couponCache.delete(String(doc.code).trim().toUpperCase()); } catch (e) {}
@@ -224,6 +226,14 @@ couponSchema.post('remove', function(doc) {
   try { couponCache.delete(String(doc.code).trim().toUpperCase()); } catch (e) {}
 });
 const Coupon = mongoose.model("Coupon", couponSchema);
+
+const WishlistSchema = new mongoose.Schema({
+  user_id: { type: String, required: true, index: true },
+  product_id: { type: String, required: true },
+  created_at: { type: Date, default: Date.now }
+});
+WishlistSchema.index({ user_id: 1, product_id: 1 }, { unique: true });
+const Wishlist = mongoose.model("Wishlist", WishlistSchema);
 
 const couponUsageSchema = new mongoose.Schema({
   coupon_id: { type: String, required: true },
@@ -257,6 +267,18 @@ const adSchema = new mongoose.Schema({
 // useful index to speed up active/date-range queries
 adSchema.index({ is_active: 1, start_date: 1, end_date: 1, priority: -1 });
 const Ad = mongoose.model("Ad", adSchema);
+
+const messageSchema = new mongoose.Schema({
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  user_name: String,
+  user_email: String,
+  product_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+  product_name: String,
+  message: { type: String, required: true },
+  status: { type: String, default: "Unread" },
+  created_at: { type: Date, default: Date.now }
+}, { timestamps: true });
+const Message = mongoose.model("Message", messageSchema);
 
 const DEFAULT_COUPONS = [
   { code: "WELCOME10", discount_type: "percentage", discount_value: 10, min_order_value: 0, max_discount: 0, is_active: true, target_audience: "new_users_only", usage_limit_per_user: 1 },
@@ -298,6 +320,29 @@ async function getAuthenticatedUser(req) {
     return null;
   }
 }
+
+// ===== AUTH MIDDLEWARE =====
+const auth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ success: false, message: "No token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Invalid token" });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ success: false, message: "Invalid token" });
+  }
+};
 
 function serializeCoupon(coupon, discountAmount) {
   return {
@@ -772,6 +817,48 @@ app.post("/api/auth/forgotPassword", forgotPasswordHandler);
 app.post("/api/auth/reset-password", resetPasswordHandler);
 app.post("/api/auth/resetPassword", resetPasswordHandler);
 
+app.put("/api/auth/profile", auth, async (req, res) => {
+  try {
+    const { name, phone, address, city, state, zip_code, country, avatar } = req.body;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (address !== undefined) updateData.address = address;
+    if (city !== undefined) updateData.city = city;
+    if (state !== undefined) updateData.state = state;
+    if (zip_code !== undefined) updateData.zip_code = zip_code;
+    if (country !== undefined) updateData.country = country;
+    if (avatar !== undefined) updateData.avatar = avatar;
+
+    const updatedUser = await User.findByIdAndUpdate(req.user._id, updateData, { new: true }).select("-password");
+    res.json({ success: true, data: updatedUser, message: "Profile updated successfully" });
+  } catch (err) {
+    console.error("Profile update error:", err);
+    res.status(500).json({ success: false, message: "Failed to update profile" });
+  }
+});
+
+app.put("/api/users/profile", auth, async (req, res) => {
+  try {
+    const { name, phone, address, city, state, zip_code, country, avatar } = req.body;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (address !== undefined) updateData.address = address;
+    if (city !== undefined) updateData.city = city;
+    if (state !== undefined) updateData.state = state;
+    if (zip_code !== undefined) updateData.zip_code = zip_code;
+    if (country !== undefined) updateData.country = country;
+    if (avatar !== undefined) updateData.avatar = avatar;
+
+    const updatedUser = await User.findByIdAndUpdate(req.user._id, updateData, { new: true }).select("-password");
+    res.json({ success: true, data: updatedUser, message: "Profile updated successfully" });
+  } catch (err) {
+    console.error("Profile update error:", err);
+    res.status(500).json({ success: false, message: "Failed to update profile" });
+  }
+});
+
 // ===== ORDERS =====
 app.post("/api/orders", async (req, res) => {
   const { userId, items, total, address } = req.body;
@@ -858,32 +945,6 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
-app.get("/api/orders/:userId", async (req, res) => {
-  try {
-    const orders = await Order.find({ user_id: req.params.userId }).sort({ created_at: -1 });
-    res.json({ success: true, data: orders, count: orders.length });
-  } catch {
-    res.status(500).json({ success: false, message: "Failed to fetch orders" });
-  }
-});
-
-app.get("/api/carousel", async (req, res) => {
-  try {
-    const config = await CarouselConfig.findOne({ key: "home" });
-    res.json({
-      success: true,
-      data: config?.slides?.length ? config.slides : DEFAULT_CAROUSEL_SLIDES
-    });
-  } catch {
-    res.status(500).json({ success: false, message: "Failed to fetch carousel" });
-  }
-});
-
-// ===== HEALTH =====
-app.get("/api/health", (req, res) => {
-  res.json({ success: true, message: "Server is running" });
-});
-
 // ===== ADMIN MIDDLEWARE =====
 const adminAuth = async (req, res, next) => {
   try {
@@ -906,6 +967,149 @@ const adminAuth = async (req, res, next) => {
     return res.status(401).json({ success: false, message: "Invalid token" });
   }
 };
+
+app.get("/api/admin/orders", adminAuth, async (req, res) => {
+  try {
+    const orders = await Order.find().sort({ created_at: -1 });
+    res.json({ success: true, data: orders, count: orders.length });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to fetch orders" });
+  }
+});
+
+app.put("/api/admin/orders/:id/payment-status", adminAuth, async (req, res) => {
+  try {
+    const { payment_status } = req.body;
+    if (!["Paid", "Unpaid"].includes(payment_status)) {
+      return res.status(400).json({ success: false, message: "Invalid payment status" });
+    }
+
+    let updatedOrder = null;
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      updatedOrder = await Order.findByIdAndUpdate(req.params.id, { payment_status }, { new: true });
+    }
+    if (!updatedOrder) {
+      updatedOrder = await Order.findOneAndUpdate(
+        { $or: [{ _id: req.params.id }, { id: isNaN(req.params.id) ? req.params.id : Number(req.params.id) }] },
+        { payment_status },
+        { new: true }
+      );
+    }
+
+    if (!updatedOrder) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    res.json({ success: true, data: updatedOrder, message: `Payment status updated to ${payment_status}` });
+  } catch (err) {
+    console.error("Error updating payment status:", err);
+    res.status(500).json({ success: false, message: "Failed to update payment status" });
+  }
+});
+
+app.get("/api/orders/:userId", async (req, res) => {
+  try {
+    const orders = await Order.find({ user_id: req.params.userId }).sort({ created_at: -1 });
+    res.json({ success: true, data: orders, count: orders.length });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to fetch orders" });
+  }
+});
+
+// ===== WISHLIST =====
+app.get("/api/wishlist/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId || userId === "undefined") {
+      return res.json({ success: true, data: [], count: 0 });
+    }
+    const items = await Wishlist.find({ user_id: String(userId) });
+    const productIds = items.map(i => i.product_id);
+
+    const dbProducts = await Product.find({
+      $or: [
+        { _id: { $in: productIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } },
+        { id: { $in: productIds.map(id => isNaN(id) ? id : Number(id)) } }
+      ]
+    });
+
+    res.json({ success: true, data: dbProducts, count: dbProducts.length });
+  } catch (err) {
+    console.error("Error fetching wishlist:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch wishlist" });
+  }
+});
+
+app.post("/api/wishlist/:userId/:productId", async (req, res) => {
+  try {
+    const { userId, productId } = req.params;
+    if (!userId || !productId || userId === "undefined" || productId === "undefined") {
+      return res.status(400).json({ success: false, message: "Invalid parameters" });
+    }
+
+    await Wishlist.updateOne(
+      { user_id: String(userId), product_id: String(productId) },
+      { user_id: String(userId), product_id: String(productId) },
+      { upsert: true }
+    );
+
+    const items = await Wishlist.find({ user_id: String(userId) });
+    const productIds = items.map(i => i.product_id);
+    const dbProducts = await Product.find({
+      $or: [
+        { _id: { $in: productIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } },
+        { id: { $in: productIds.map(id => isNaN(id) ? id : Number(id)) } }
+      ]
+    });
+
+    res.json({ success: true, data: dbProducts, message: "Added to wishlist" });
+  } catch (err) {
+    console.error("Error adding to wishlist:", err);
+    res.status(500).json({ success: false, message: "Failed to add to wishlist" });
+  }
+});
+
+app.delete("/api/wishlist/:userId/:productId", async (req, res) => {
+  try {
+    const { userId, productId } = req.params;
+    if (!userId || !productId || userId === "undefined" || productId === "undefined") {
+      return res.status(400).json({ success: false, message: "Invalid parameters" });
+    }
+
+    await Wishlist.deleteOne({ user_id: String(userId), product_id: String(productId) });
+
+    const items = await Wishlist.find({ user_id: String(userId) });
+    const productIds = items.map(i => i.product_id);
+    const dbProducts = await Product.find({
+      $or: [
+        { _id: { $in: productIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } },
+        { id: { $in: productIds.map(id => isNaN(id) ? id : Number(id)) } }
+      ]
+    });
+
+    res.json({ success: true, data: dbProducts, message: "Removed from wishlist" });
+  } catch (err) {
+    console.error("Error removing from wishlist:", err);
+    res.status(500).json({ success: false, message: "Failed to remove from wishlist" });
+  }
+});
+
+app.get("/api/carousel", async (req, res) => {
+  try {
+    const config = await CarouselConfig.findOne({ key: "home" });
+    res.json({
+      success: true,
+      data: config?.slides?.length ? config.slides : DEFAULT_CAROUSEL_SLIDES
+    });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to fetch carousel" });
+  }
+});
+
+// ===== HEALTH =====
+app.get("/api/health", (req, res) => {
+  res.json({ success: true, message: "Server is running" });
+});
 
 // ===== ADMIN PRODUCTS =====
 app.get("/api/admin/products", adminAuth, async (req, res) => {
@@ -939,6 +1143,15 @@ app.post("/api/admin/products", adminAuth, handleProductUpload, async (req, res)
       imagesArr = [image_url];
     }
 
+    let sizesArray = ["7", "8", "9", "10", "11", "12"];
+    if (req.body.sizes) {
+      try {
+        sizesArray = typeof req.body.sizes === "string" ? JSON.parse(req.body.sizes) : req.body.sizes;
+      } catch (e) {
+        sizesArray = String(req.body.sizes).split(",").map(s => s.trim()).filter(Boolean);
+      }
+    }
+
     const product = await Product.create({
       name,
       price: Number(price),
@@ -946,11 +1159,12 @@ app.post("/api/admin/products", adminAuth, handleProductUpload, async (req, res)
       category,
       stock: Number(stock),
       description,
-      image_url: imageUrl,
+      image_url: imagesArr[0] || image_url || "",
       images: imagesArr,
       videos: videosArr,
       is_featured: is_featured === "true" || is_featured === true,
-      offer: offer || ""
+      offer: offer || "",
+      sizes: sizesArray
     });
     res.json({ success: true, data: product });
   } catch (err) {
@@ -967,59 +1181,127 @@ app.put("/api/admin/products/:id", adminAuth, (req, res, next) => {
   }
 }, async (req, res) => {
   try {
-    const { name, price, original_price, category, stock, description, image_url, offer, is_featured } = req.body;
+    const { name, price, original_price, category, stock, description, image_url, offer, is_featured, sizes, existing_images, existing_videos } = req.body;
 
-    const updateData = {
-      name,
-      price: Number(price),
-      original_price: original_price ? Number(original_price) : Number(price),
-      category,
-      stock: Number(stock),
-      description,
-      offer: offer || ""
-    };
-
-    if (is_featured !== undefined) {
-      updateData.is_featured = is_featured === "true" || is_featured === true;
+    let existingProduct = null;
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      existingProduct = await Product.findById(req.params.id);
+    }
+    if (!existingProduct) {
+      existingProduct = await Product.findOne({
+        $or: [
+          { _id: req.params.id },
+          { id: isNaN(req.params.id) ? req.params.id : Number(req.params.id) }
+        ]
+      });
     }
 
-    if (req.files) {
-      const newImages = [];
-      const newVideos = [];
+    const updateData = {};
+    if (name !== undefined) updateData.name = name.trim();
+    if (price !== undefined) updateData.price = Number(price);
+    if (original_price !== undefined) updateData.original_price = Number(original_price);
+    if (category !== undefined) updateData.category = category.trim();
+    if (stock !== undefined) updateData.stock = Number(stock);
+    if (description !== undefined) updateData.description = description.trim();
+    if (offer !== undefined) updateData.offer = offer;
+    if (is_featured !== undefined) updateData.is_featured = is_featured === "true" || is_featured === true;
 
-      if (req.files['images'] && req.files['images'].length > 0) {
-        const base64Images = req.files['images'].map(file => fileToBase64(file)).filter(Boolean);
-        newImages.push(...base64Images);
-      } else if (image_url) {
-        newImages.push(image_url);
+    if (sizes) {
+      try {
+        updateData.sizes = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
+      } catch (e) {
+        updateData.sizes = String(sizes).split(",").map(s => s.trim()).filter(Boolean);
       }
+    }
 
-      if (req.files['videos'] && req.files['videos'].length > 0) {
-        newVideos.push(...req.files['videos'].map(file => fileToBase64(file)).filter(Boolean));
+    // Process images
+    let updatedImages = [];
+    if (existing_images) {
+      try {
+        updatedImages = typeof existing_images === "string" ? JSON.parse(existing_images) : existing_images;
+      } catch (e) {
+        updatedImages = [];
       }
+    } else if (existingProduct && Array.isArray(existingProduct.images) && existingProduct.images.length > 0) {
+      updatedImages = [...existingProduct.images];
+    } else if (image_url) {
+      updatedImages = [image_url];
+    } else if (existingProduct?.image_url) {
+      updatedImages = [existingProduct.image_url];
+    }
 
-      if (newImages.length > 0) {
-        updateData.images = newImages;
-        updateData.image_url = newImages[0];
-      }
+    if (req.files && req.files['images'] && req.files['images'].length > 0) {
+      const base64Images = req.files['images'].map(file => fileToBase64(file)).filter(Boolean);
+      updatedImages = [...updatedImages, ...base64Images];
+    }
 
-      if (newVideos.length > 0) {
-        updateData.videos = newVideos;
-      }
+    if (updatedImages.length > 0) {
+      updateData.images = updatedImages;
+      updateData.image_url = updatedImages[0];
     } else if (image_url) {
       updateData.image_url = image_url;
+      updateData.images = [image_url];
     }
 
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    );
-    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+    // Process videos
+    let updatedVideos = [];
+    if (existing_videos) {
+      try {
+        updatedVideos = typeof existing_videos === "string" ? JSON.parse(existing_videos) : existing_videos;
+      } catch (e) {
+        updatedVideos = [];
+      }
+    } else if (existingProduct && Array.isArray(existingProduct.videos)) {
+      updatedVideos = [...existingProduct.videos];
+    }
+
+    if (req.files && req.files['videos'] && req.files['videos'].length > 0) {
+      const base64Videos = req.files['videos'].map(file => fileToBase64(file)).filter(Boolean);
+      updatedVideos = [...updatedVideos, ...base64Videos];
+    }
+
+    if (updatedVideos.length > 0) {
+      updateData.videos = updatedVideos;
+    }
+
+    let product = null;
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      product = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    }
+    
+    if (!product) {
+      product = await Product.findOne({
+        $or: [
+          { _id: req.params.id },
+          { id: isNaN(req.params.id) ? req.params.id : Number(req.params.id) }
+        ]
+      });
+
+      if (product) {
+        Object.assign(product, updateData);
+        await product.save();
+      } else {
+        product = await Product.create({
+          name: updateData.name || "Product",
+          price: updateData.price || 0,
+          original_price: updateData.original_price || updateData.price || 0,
+          category: updateData.category || "Casual Sneakers",
+          stock: updateData.stock || 0,
+          description: updateData.description || "",
+          image_url: updateData.image_url || "",
+          images: updateData.images || [],
+          videos: updateData.videos || [],
+          is_featured: updateData.is_featured || false,
+          offer: updateData.offer || "",
+          sizes: updateData.sizes || ["7", "8", "9", "10", "11", "12"]
+        });
+      }
+    }
+
     res.json({ success: true, data: product });
   } catch (err) {
     console.error("Product update error:", err);
-    res.status(500).json({ success: false, message: "Failed to update product" });
+    res.status(500).json({ success: false, message: "Failed to update product: " + (err.message || "Server error") });
   }
 });
 
@@ -1030,6 +1312,63 @@ app.delete("/api/admin/products/:id", adminAuth, async (req, res) => {
     res.json({ success: true, message: "Product deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: "Failed to delete product" });
+  }
+});
+
+// ===== CUSTOMER MESSAGES / SELLER CONTACT =====
+app.post("/api/messages", auth, async (req, res) => {
+  try {
+    const { product_id, product_name, message, user_name, user_email } = req.body;
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, message: "Message content is required" });
+    }
+    const newMessage = await Message.create({
+      user_id: req.user._id,
+      user_name: user_name || req.user.name || "Customer",
+      user_email: user_email || req.user.email,
+      product_id: product_id || null,
+      product_name: product_name || "General Inquiry",
+      message: message.trim(),
+      status: "Unread"
+    });
+    res.json({ success: true, data: newMessage, message: "Message sent to seller successfully!" });
+  } catch (err) {
+    console.error("Error creating message:", err);
+    res.status(500).json({ success: false, message: "Failed to send message" });
+  }
+});
+
+app.get("/api/admin/messages", adminAuth, async (req, res) => {
+  try {
+    const messages = await Message.find().sort({ createdAt: -1 });
+    res.json({ success: true, data: messages });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Failed to fetch messages" });
+  }
+});
+
+app.put("/api/admin/messages/:id/status", adminAuth, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const updated = await Message.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ success: false, message: "Message not found" });
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Failed to update message status" });
+  }
+});
+
+app.delete("/api/admin/messages/:id", adminAuth, async (req, res) => {
+  try {
+    const deleted = await Message.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: "Message not found" });
+    res.json({ success: true, message: "Message deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Failed to delete message" });
   }
 });
 
@@ -1449,8 +1788,16 @@ async function startServer() {
     await ensureAdminUser();
     console.log("✅ MongoDB Connected");
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
+    });
+
+    server.on("error", (err) => {
+      if (err.code === "EADDRINUSE") {
+        console.log(`⚠️ Port ${PORT} is already in use! Your backend server is ALREADY running on port ${PORT}.`);
+      } else {
+        console.error("❌ Server error:", err);
+      }
     });
 
   } catch (err) {

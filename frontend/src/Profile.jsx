@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User, Mail, Phone, MapPin, Edit2, Save, X, Heart, ShoppingBag, LogOut, Plus } from "lucide-react";
+import { User, Mail, Phone, MapPin, Edit2, Save, X, Heart, ShoppingBag, LogOut, Plus, Camera } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
 
@@ -21,6 +21,7 @@ export default function Profile({ onPageChange }) {
     state: "",
     zipCode: "",
     country: "",
+    avatar: "",
   });
 
   const [editData, setEditData] = useState(profileData);
@@ -53,6 +54,7 @@ export default function Profile({ onPageChange }) {
           state: userData.state || "",
           zipCode: userData.zip_code || "",
           country: userData.country || "",
+          avatar: userData.avatar || user.avatar || "",
         });
         setEditData({
           name: userData.name || "",
@@ -63,6 +65,7 @@ export default function Profile({ onPageChange }) {
           state: userData.state || "",
           zipCode: userData.zip_code || "",
           country: userData.country || "",
+          avatar: userData.avatar || user.avatar || "",
         });
       }
     } catch (err) {
@@ -185,6 +188,57 @@ export default function Profile({ onPageChange }) {
     }));
   };
 
+  const handleAvatarUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Profile picture must be under 5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result;
+      if (base64) {
+        setProfileData(prev => ({ ...prev, avatar: base64 }));
+        setEditData(prev => ({ ...prev, avatar: base64 }));
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        const updatedUser = { ...user, avatar: base64 };
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        window.dispatchEvent(new Event("userLoggedIn"));
+
+        const token = localStorage.getItem("token");
+        if (token) {
+          try {
+            await fetch(`${API_BASE_URL}/users/profile`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify({ avatar: base64 })
+            });
+          } catch (err) {
+            console.error("Error saving avatar to server:", err);
+          }
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const calculateProfileCompletion = (data) => {
+    let score = 0;
+    if (data.name?.trim()) score += 15;
+    if (data.email?.trim()) score += 15;
+    if (data.phone?.trim()) score += 10;
+    if (data.address?.trim()) score += 15;
+    if (data.city?.trim()) score += 15;
+    if (data.state?.trim()) score += 10;
+    if (data.zipCode?.trim()) score += 10;
+    if (data.avatar?.trim()) score += 10;
+    return Math.min(score, 100);
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
@@ -206,16 +260,22 @@ export default function Profile({ onPageChange }) {
 
   return (
     <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-12 px-4 shadow-lg">
-        <div className="max-w-6xl mx-auto flex justify-between items-start">
+      {/* Animated Header */}
+      <div className="animated-products-banner text-white py-12 px-4 shadow-2xl border-b border-gray-800 relative">
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+        <div className="max-w-6xl mx-auto flex justify-between items-center relative z-10">
           <div>
-            <h1 className="text-4xl font-bold mb-2">My Profile</h1>
-            <p className="text-gray-300">Manage your account and preferences</p>
+            <span className="inline-block px-3 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-400 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-sm animate-bounce mb-2">
+              User Dashboard
+            </span>
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight animated-banner-title drop-shadow-md">
+              My Profile
+            </h1>
+            <p className="text-gray-300 text-sm md:text-base font-medium mt-1">Manage your account and preferences</p>
           </div>
           <button
             onClick={handleLogout}
-            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
+            className="bg-gray-800 border border-gray-700 hover:bg-red-600/20 hover:border-red-500 text-red-400 px-4 py-2.5 rounded-xl flex items-center gap-2 transition font-semibold"
           >
             <LogOut size={18} />
             Logout
@@ -228,16 +288,62 @@ export default function Profile({ onPageChange }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Profile Card */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-lg p-8">
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-xl p-8 text-white">
+              {/* Profile Completion Progress Bar */}
+              <div className="mb-8 bg-gray-950 p-5 rounded-2xl border border-gray-800 shadow-inner">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                    Profile Setup Progress
+                  </span>
+                  <span className="text-sm font-extrabold text-orange-400">
+                    {calculateProfileCompletion(profileData)}% Complete
+                  </span>
+                </div>
+                <div className="w-full h-3.5 bg-gray-900 rounded-full overflow-hidden p-0.5 border border-gray-800">
+                  <div
+                    className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-emerald-400 rounded-full transition-all duration-700 shadow-lg shadow-orange-500/20"
+                    style={{ width: `${calculateProfileCompletion(profileData)}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-400 mt-2.5">
+                  {calculateProfileCompletion(profileData) === 100
+                    ? "🎉 Excellent! Your profile is 100% complete."
+                    : "Complete your phone, address, and profile photo to reach 100% completion."}
+                </p>
+              </div>
+
               {/* Profile Header */}
-              <div className="flex items-start justify-between mb-8 pb-6 border-b-2 border-gray-200">
+              <div className="flex items-start justify-between mb-8 pb-6 border-b border-gray-800">
                 <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 bg-gradient-to-br from-gray-700 to-gray-500 rounded-full flex items-center justify-center text-white">
-                    <User size={40} />
+                  <div className="relative group w-20 h-20 shrink-0">
+                    {profileData.avatar ? (
+                      <img
+                        src={profileData.avatar}
+                        alt={profileData.name}
+                        className="w-20 h-20 rounded-full object-cover border-2 border-orange-500 shadow-lg"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-500 rounded-full flex items-center justify-center text-white shadow-lg">
+                        <User size={40} />
+                      </div>
+                    )}
+                    <label
+                      title="Upload Profile Picture"
+                      className="absolute bottom-0 right-0 bg-gray-800 hover:bg-orange-500 text-white p-1.5 rounded-full cursor-pointer shadow-md transition border border-gray-700"
+                    >
+                      <Camera size={14} />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
                   <div>
-                    <h2 className="text-3xl font-bold text-gray-800">{profileData.name}</h2>
-                    <p className="text-gray-600">{profileData.email}</p>
+                    <h2 className="text-3xl font-bold text-white">{profileData.name}</h2>
+                    <p className="text-gray-400">{profileData.email}</p>
                   </div>
                 </div>
                 {!isEditing && !showWishlist && (
@@ -265,20 +371,20 @@ export default function Profile({ onPageChange }) {
                 <div className="space-y-6">
                   {/* Contact Info */}
                   <div>
-                    <h3 className="text-xl font-bold text-gray-800 mb-4">Contact Information</h3>
+                    <h3 className="text-xl font-bold text-white mb-4">Contact Information</h3>
                     <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Mail className="text-gray-600" size={20} />
+                      <div className="flex items-center gap-3 bg-gray-950/80 p-3 rounded-xl border border-gray-800">
+                        <Mail className="text-orange-400" size={20} />
                         <div>
-                          <p className="text-gray-600 text-sm">Email</p>
-                          <p className="text-gray-800 font-semibold">{profileData.email}</p>
+                          <p className="text-gray-400 text-xs">Email</p>
+                          <p className="text-white font-semibold">{profileData.email}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Phone className="text-gray-600" size={20} />
+                      <div className="flex items-center gap-3 bg-gray-950/80 p-3 rounded-xl border border-gray-800">
+                        <Phone className="text-orange-400" size={20} />
                         <div>
-                          <p className="text-gray-600 text-sm">Phone</p>
-                          <p className="text-gray-800 font-semibold">{profileData.phone || "Not provided"}</p>
+                          <p className="text-gray-400 text-xs">Phone</p>
+                          <p className="text-white font-semibold">{profileData.phone || "Not provided"}</p>
                         </div>
                       </div>
                     </div>
@@ -287,28 +393,28 @@ export default function Profile({ onPageChange }) {
                   {/* Address Info */}
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl font-bold text-gray-800">Address</h3>
+                      <h3 className="text-xl font-bold text-white">Address</h3>
                       <button
                         onClick={() => onPageChange("AddAddress")}
-                        className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition flex items-center gap-2 text-sm"
+                        className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-xl hover:shadow-lg transition flex items-center gap-2 text-sm font-semibold"
                       >
                         <Plus size={16} />
                         {profileData.address ? "Edit Address" : "Add Address"}
                       </button>
                     </div>
-                    <div className="flex items-start gap-3">
-                      <MapPin className="text-gray-600 mt-1" size={20} />
+                    <div className="flex items-start gap-3 bg-gray-950/80 p-4 rounded-xl border border-gray-800">
+                      <MapPin className="text-orange-400 mt-1" size={20} />
                       <div>
-                        <p className="text-gray-600 text-sm">Delivery Address</p>
+                        <p className="text-gray-400 text-xs">Delivery Address</p>
                         {profileData.address ? (
                           <>
-                            <p className="text-gray-800 font-semibold">{profileData.address}</p>
-                            <p className="text-gray-600 text-sm mt-1">
+                            <p className="text-white font-semibold">{profileData.address}</p>
+                            <p className="text-gray-400 text-sm mt-1">
                               {profileData.city}, {profileData.state} {profileData.zipCode}, {profileData.country}
                             </p>
                           </>
                         ) : (
-                          <p className="text-gray-800 font-semibold">No address added</p>
+                          <p className="text-white font-semibold">No address added</p>
                         )}
                       </div>
                     </div>
@@ -580,33 +686,33 @@ export default function Profile({ onPageChange }) {
           {/* Sidebar */}
           <div className="lg:col-span-1 space-y-6">
             {/* Quick Stats */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">Account Stats</h3>
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-xl p-6 text-white">
+              <h3 className="text-xl font-bold text-white mb-4">Account Stats</h3>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gray-950 border border-gray-800 rounded-xl">
                   <div className="flex items-center gap-3">
-                    <ShoppingBag className="text-gray-600" size={24} />
+                    <ShoppingBag className="text-orange-400" size={24} />
                     <div>
-                      <p className="text-gray-600 text-sm">Total Orders</p>
-                      <p className="text-2xl font-bold text-gray-800">{orders.length}</p>
+                      <p className="text-gray-400 text-sm">Total Orders</p>
+                      <p className="text-2xl font-bold text-white">{orders.length}</p>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gray-950 border border-gray-800 rounded-xl">
                   <div className="flex items-center gap-3">
-                    <Heart className="text-gray-600" size={24} />
+                    <Heart className="text-orange-400" size={24} />
                     <div>
-                      <p className="text-gray-600 text-sm">Wishlist Items</p>
-                      <p className="text-2xl font-bold text-gray-800">{wishlist.length}</p>
+                      <p className="text-gray-400 text-sm">Wishlist Items</p>
+                      <p className="text-2xl font-bold text-white">{wishlist.length}</p>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gray-950 border border-gray-800 rounded-xl">
                   <div className="flex items-center gap-3">
-                    <ShoppingBag className="text-gray-600" size={24} />
+                    <ShoppingBag className="text-orange-400" size={24} />
                     <div>
-                      <p className="text-gray-600 text-sm">Total Spent</p>
-                      <p className="text-2xl font-bold text-gray-800">
+                      <p className="text-gray-400 text-sm">Total Spent</p>
+                      <p className="text-2xl font-bold text-white">
                         ₹{orders
                           .filter((order) => order.status !== "Cancelled")
                           .reduce((sum, order) => sum + (order.total || 0), 0)}
@@ -618,22 +724,22 @@ export default function Profile({ onPageChange }) {
             </div>
 
             {/* Settings & Actions */}
-            <div className="bg-white rounded-lg shadow-lg p-6 space-y-3">
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-xl p-6 space-y-3 text-white">
               <button
                 onClick={() => {
                   setShowWishlist(true);
                   setIsEditing(false);
                 }}
-                className="w-full flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg transition text-gray-700 font-semibold"
+                className="w-full flex items-center gap-3 p-3 hover:bg-gray-800 rounded-xl transition text-gray-200 font-semibold"
               >
-                <Heart size={20} className="text-gray-600" />
+                <Heart size={20} className="text-orange-400" />
                 My Wishlist
               </button>
               <button
                 onClick={() => onPageChange("Products")}
-                className="w-full flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg transition text-gray-700 font-semibold"
+                className="w-full flex items-center gap-3 p-3 hover:bg-gray-800 rounded-xl transition text-gray-200 font-semibold"
               >
-                <ShoppingBag size={20} className="text-gray-600" />
+                <ShoppingBag size={20} className="text-orange-400" />
                 Continue Shopping
               </button>
             </div>

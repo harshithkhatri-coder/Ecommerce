@@ -82,13 +82,15 @@ export default function Products({ onAddToCart, onPageChange }) {
   const fetchWishlist = async () => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (!user) return;
+    const userId = user.id || user._id;
+    if (!userId) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/wishlist/${user.id}`);
+      const response = await fetch(`${API_BASE_URL}/wishlist/${userId}`);
       const data = await response.json();
       if (data.success) {
-        const wishlistIds = (data.data || []).map(item => item._id || item.id);
-        setWishlist(wishlistIds.filter(Boolean));
+        const wishlistIds = (data.data || []).map(item => String(item._id || item.id));
+        setWishlist(wishlistIds);
       }
     } catch (err) {
       console.error("Error fetching wishlist:", err);
@@ -105,27 +107,25 @@ export default function Products({ onAddToCart, onPageChange }) {
       return;
     }
 
-    const isInWishlist = wishlist.includes(product._id);
+    const userId = user.id || user._id;
+    const pId = String(product._id || product.id);
+    const isInWishlist = wishlist.includes(pId);
+
+    // Optimistic UI update
+    const updatedWishlist = isInWishlist
+      ? wishlist.filter(id => id !== pId)
+      : [...wishlist, pId];
+    setWishlist(updatedWishlist);
 
     try {
-      if (isInWishlist) {
-        const response = await fetch(`${API_BASE_URL}/wishlist/${user.id}/${product._id}`, {
-          method: "DELETE",
-        });
-        const data = await response.json();
-        if (data.success) {
-          const wishlistIds = (data.data || []).map(item => item._id || item.id);
-          setWishlist(wishlistIds.filter(Boolean));
-        }
-      } else {
-        const response = await fetch(`${API_BASE_URL}/wishlist/${user.id}/${product._id}`, {
-          method: "POST",
-        });
-        const data = await response.json();
-        if (data.success) {
-          const wishlistIds = (data.data || []).map(item => item._id || item.id);
-          setWishlist(wishlistIds.filter(Boolean));
-        }
+      const method = isInWishlist ? "DELETE" : "POST";
+      const response = await fetch(`${API_BASE_URL}/wishlist/${userId}/${pId}`, {
+        method,
+      });
+      const data = await response.json();
+      if (data.success) {
+        const wishlistIds = (data.data || []).map(item => String(item._id || item.id));
+        setWishlist(wishlistIds);
       }
     } catch (err) {
       console.error("Error updating wishlist:", err);
@@ -200,11 +200,21 @@ export default function Products({ onAddToCart, onPageChange }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-black to-gray-950">
-      {/* Page Header */}
-        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-12 px-4 shadow-lg">
-        <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-4xl font-bold mb-2">All Products</h1>
-           <p className="text-gray-200">Browse our complete collection of premium products</p>
+      {/* Animated Page Header Banner */}
+      <div className="animated-products-banner py-14 px-4 border-b border-gray-800 shadow-2xl relative">
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+        <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none animate-pulse delay-1000" />
+        
+        <div className="max-w-7xl mx-auto text-center relative z-10 space-y-2">
+          <span className="inline-block px-3.5 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-400 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-sm animate-bounce">
+            Premium Footwear Collection
+          </span>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight animated-banner-title drop-shadow-md">
+            All Products
+          </h1>
+          <p className="text-gray-300 max-w-xl mx-auto text-sm md:text-base font-medium">
+            Browse our complete collection of premium products
+          </p>
         </div>
       </div>
 
@@ -291,14 +301,14 @@ export default function Products({ onAddToCart, onPageChange }) {
                     {/* Heart Button */}
                     <button
                       onClick={(e) => handleToggleWishlist(product, e)}
-                      className={`absolute top-2 left-2 p-2 rounded-full transition ${wishlist.includes(product._id)
-                          ? "bg-gray-500 text-white"
+                      className={`absolute top-2 left-2 p-2 rounded-full transition ${wishlist.includes(String(product._id || product.id))
+                          ? "bg-red-500 text-white shadow-md scale-105"
                           : "bg-white/80 text-gray-600 hover:bg-white"
                         }`}
                     >
                       <Heart
                         size={18}
-                        className={wishlist.includes(product._id) ? "fill-current" : ""}
+                        className={wishlist.includes(String(product._id || product.id)) ? "fill-current text-white" : ""}
                       />
                     </button>
                   </div>

@@ -118,24 +118,26 @@ export default function Footer({ onPageChange }) {
             <div>
               <h3 className="text-white text-lg font-bold mb-4">Contact Us</h3>
               <div className="space-y-3 text-sm">
-                <div className="flex items-start gap-3">
-                  <Mail size={18} className="text-gray-400 mt-1 flex-shrink-0" />
+                <a
+                  href="mailto:veluxkicks11@gmail.com"
+                  className="flex items-start gap-3 text-white hover:text-gray-300 transition group"
+                >
+                  <Mail size={18} className="text-gray-400 group-hover:text-white mt-1 flex-shrink-0 transition" />
                   <div>
-                    <p className="text-gray-400">Email</p>
-                     <a href="mailto: veluxkicks11@gmail.com" className="text-white hover:text-gray-300 transition">
-                    veluxkicks11@gmail.com
-                    </a>
+                    <p className="text-gray-400 text-xs">Email</p>
+                    <span className="font-medium underline underline-offset-2">veluxkicks11@gmail.com</span>
                   </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Phone size={18} className="text-gray-400 mt-1 flex-shrink-0" />
+                </a>
+                <a
+                  href="tel:+917676526644"
+                  className="flex items-start gap-3 text-white hover:text-gray-300 transition group"
+                >
+                  <Phone size={18} className="text-gray-400 group-hover:text-white mt-1 flex-shrink-0 transition" />
                   <div>
-                    <p className="text-gray-400">Phone</p>
-                     <a href="tel:+91-7676526644" className="text-white hover:text-gray-300 transition">
-                      +91 7676526644
-                    </a>
+                    <p className="text-gray-400 text-xs">Phone</p>
+                    <span className="font-medium underline underline-offset-2">+91 76765 26644</span>
                   </div>
-                </div>
+                </a>
               </div>
             </div>
           </div>

@@ -121,21 +121,25 @@ export default function About() {
           <h2 className="text-3xl font-bold text-center text-gray-300 mb-8">Get In Touch</h2>
           <div className="grid grid-cols-3 gap-6 max-w-3xl mx-auto">
             <div className="text-center">
-               <div className="bg-gray-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                <Mail size={24} />
-              </div>
+               <a href="mailto:veluxkicks11@gmail.com" className="inline-block group">
+                 <div className="bg-gray-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 group-hover:bg-gray-700 transition cursor-pointer">
+                  <Mail size={24} />
+                </div>
+               </a>
                <p className="text-gray-300 mb-2">Email Us</p>
-                 <a href="mailto: veluxkicks11@gmail.com" className="text-gray-300 hover:text-white transition font-semibold">
+                 <a href="mailto:veluxkicks11@gmail.com" className="text-gray-300 hover:text-white transition font-semibold">
                 veluxkicks11@gmail.com
               </a>
             </div>
             <div className="text-center">
-               <div className="bg-gray-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                <Phone size={24} />
-              </div>
+               <a href="tel:+917676526644" className="inline-block group">
+                 <div className="bg-gray-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 group-hover:bg-gray-700 transition cursor-pointer">
+                  <Phone size={24} />
+                </div>
+               </a>
                <p className="text-gray-300 mb-2">Call Us</p>
-                 <a href="tel:+91-7676526644" className="text-gray-300 hover:text-white transition font-semibold">
-                +91 7676526644
+                 <a href="tel:+917676526644" className="text-gray-300 hover:text-white transition font-semibold">
+                +91 76765 26644
               </a>
             </div>
             <div className="text-center">

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Package, ShoppingCart, Users, DollarSign, Plus, Edit2, Trash2,
   Eye, X, Home, BarChart3, TrendingUp, Lock, Mail, LogOut, Upload,
-  Bell, Tag
+  Bell, Tag, MessageSquare
 } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
@@ -14,7 +14,18 @@ const DEFAULT_CAROUSEL_IMAGES = [
   { id: 4, url: "/images/WhatsApp Image 2026-01-13 at 7.57.39 PM.jpeg", title: "Premium Sneakers" },
   { id: 5, url: "/images/WhatsApp Image 2026-01-13 at 7.57.40 PM.jpeg", title: "Latest Trends" }
 ];
-const DEFAULT_PRODUCT_CATEGORIES = ["Running Sneakers", "Casual Sneakers", "Watches", "Belts"];
+const DEFAULT_PRODUCT_CATEGORIES = [
+  "Running Sneakers",
+  "Casual Sneakers",
+  "High Top Sneakers",
+  "Watches",
+  "Belts",
+  "Accessories",
+  "Wallets",
+  "Perfumes",
+  "Bags",
+  "Electronics"
+];
 const ADMIN_LOGIN_EMAIL = "admin@veluxkicks.com";
 const PRODUCT_IMAGE_LIMIT = 10;
 const PRODUCT_VIDEO_LIMIT = 2;
@@ -54,6 +65,7 @@ export default function Admin({ onPageChange, onLogout }) {
   // eslint-disable-next-line no-unused-vars
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [customerMessages, setCustomerMessages] = useState([]);
   const [carouselItems, setCarouselItems] = useState(loadCarouselImages());
   const [editingCarousel, setEditingCarousel] = useState(false);
   const [carouselForm, setCarouselForm] = useState([]);
@@ -113,6 +125,7 @@ export default function Admin({ onPageChange, onLogout }) {
     image_url: "",
     offer: "",
     is_featured: false,
+    sizes: "7, 8, 9, 10, 11, 12",
   });
   const [selectedImages, setSelectedImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
@@ -483,7 +496,8 @@ export default function Admin({ onPageChange, onLogout }) {
         unreadRes,
         usersRes,
         couponsRes,
-        adsRes
+        adsRes,
+        messagesRes
       ] = await Promise.allSettled([
         fetch(`${API_BASE_URL}/admin/products`, { headers }),
         fetch(`${API_BASE_URL}/admin/carousel`, { headers }),
@@ -492,10 +506,11 @@ export default function Admin({ onPageChange, onLogout }) {
         fetch(`${API_BASE_URL}/admin/notifications/unread-count`, { headers }),
         fetch(`${API_BASE_URL}/admin/users`, { headers }),
         fetch(`${API_BASE_URL}/admin/coupons`, { headers }),
-        fetch(`${API_BASE_URL}/admin/ads`, { headers })
+        fetch(`${API_BASE_URL}/admin/ads`, { headers }),
+        fetch(`${API_BASE_URL}/admin/messages`, { headers })
       ]);
 
-      const allResponses = [productsRes, carouselRes, ordersRes, notificationsRes, unreadRes, usersRes, couponsRes, adsRes];
+      const allResponses = [productsRes, carouselRes, ordersRes, notificationsRes, unreadRes, usersRes, couponsRes, adsRes, messagesRes];
 
       if (allResponses.some(r => r.status === "fulfilled" && r.value.status === 401)) {
         clearAuth();
@@ -573,6 +588,14 @@ export default function Admin({ onPageChange, onLogout }) {
       if (adsRes.status === "fulfilled" && adsRes.value.ok) {
         const d = await adsRes.value.json();
         if (d.success) setAds(d.data || []);
+      }
+
+      // Messages
+      if (messagesRes.status === "fulfilled" && messagesRes.value.ok) {
+        const d = await messagesRes.value.json();
+        if (d.success && Array.isArray(d.data)) {
+          setCustomerMessages(d.data);
+        }
       }
 
     } catch (error) {
@@ -736,6 +759,7 @@ const handleAddProduct = () => {
       image_url: "",
       offer: "",
       is_featured: false,
+      sizes: "7, 8, 9, 10, 11, 12",
     });
     setSelectedImages([]);
     setImagePreviews([]);
@@ -747,6 +771,13 @@ const handleAddProduct = () => {
 const handleEditProduct = (product) => {
     setActiveTab("products");
     setEditingProduct(product);
+    const rawSizes = product.sizes;
+    let cleanedSizes = [];
+    if (Array.isArray(rawSizes)) {
+      cleanedSizes = rawSizes.map(s => String(s).replace(/[[\]"'\\]/g, "").trim()).filter(Boolean);
+    } else if (typeof rawSizes === "string") {
+      cleanedSizes = rawSizes.replace(/[[\]"'\\]/g, "").split(",").map(s => s.trim()).filter(Boolean);
+    }
     setProductForm({
       name: product.name || "",
       price: product.price?.toString() || "",
@@ -757,6 +788,7 @@ const handleEditProduct = (product) => {
       image_url: product.image_url || product.image || "",
       offer: product.offer || "",
       is_featured: product.is_featured === true,
+      sizes: cleanedSizes.length > 0 ? cleanedSizes.join(", ") : "7, 8, 9, 10, 11, 12",
     });
     const images = product.images && Array.isArray(product.images) && product.images.length > 0
       ? product.images
@@ -821,7 +853,7 @@ const handleEditProduct = (product) => {
 
   const handleSaveProduct = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem("adminToken");
+    const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
     const editingProductId = getEntityId(editingProduct);
 
     if (editingProduct && !editingProductId) {
@@ -835,6 +867,9 @@ const handleEditProduct = (product) => {
 
     const method = editingProduct ? "PUT" : "POST";
 
+    const existingImages = imagePreviews.filter(src => typeof src === 'string' && !src.startsWith('blob:'));
+    const existingVideos = videoPreviews.filter(src => typeof src === 'string' && !src.startsWith('blob:'));
+
     const formData = new FormData();
     formData.append("name", productForm.name.trim());
     formData.append("price", productForm.price);
@@ -844,7 +879,15 @@ const handleEditProduct = (product) => {
     formData.append("description", productForm.description.trim());
     formData.append("offer", productForm.offer || "");
     formData.append("is_featured", productForm.is_featured ? "true" : "false");
-    formData.append("image_url", productForm.image_url.trim());
+    formData.append("image_url", productForm.image_url.trim() || existingImages[0] || "");
+    formData.append("existing_images", JSON.stringify(existingImages));
+    formData.append("existing_videos", JSON.stringify(existingVideos));
+    const cleanedSizes = (productForm.sizes || "")
+      .replace(/[[\]"'\\]/g, "")
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean);
+    formData.append("sizes", JSON.stringify(cleanedSizes));
 
     if (selectedImages.length > 0) {
       selectedImages.forEach((img) => {
@@ -942,6 +985,33 @@ const handleEditProduct = (product) => {
     }
   };
 
+  const handleTogglePaymentStatus = async (orderId, targetStatus) => {
+    const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
+
+    // Optimistic UI update
+    setOrders(prev => prev.map(o => ((o._id || o.id) === orderId ? { ...o, payment_status: targetStatus } : o)));
+    if (selectedOrder && (selectedOrder._id || selectedOrder.id) === orderId) {
+      setSelectedOrder(prev => ({ ...prev, payment_status: targetStatus }));
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/orders/${orderId}/payment-status`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ payment_status: targetStatus })
+      });
+      const data = await response.json();
+      if (data.success && data.data) {
+        setOrders(prev => prev.map(o => ((o._id || o.id) === orderId ? { ...o, ...data.data } : o)));
+      }
+    } catch (err) {
+      console.error("Error updating payment status:", err);
+    }
+  };
+
   const handleDeleteOrder = async (orderId) => {
     if (!window.confirm("Are you sure you want to delete this order?")) return;
 
@@ -967,12 +1037,12 @@ const handleEditProduct = (product) => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "Pending": return "bg-gray-800 text-gray-200";
-      case "Processing": return "bg-gray-700 text-gray-200";
-      case "Shipped": return "bg-gray-600 text-gray-200";
-      case "Delivered": return "bg-gray-500 text-white";
-      case "Cancelled": return "bg-gray-900 text-gray-400";
-      default: return "bg-gray-800 text-gray-200";
+      case "Pending": return "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold";
+      case "Processing": return "bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold";
+      case "Shipped": return "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold";
+      case "Delivered": return "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold";
+      case "Cancelled": return "bg-red-500/20 text-red-400 border border-red-500/40 font-bold";
+      default: return "bg-gray-800 text-gray-200 font-bold";
     }
   };
 
@@ -1053,28 +1123,28 @@ const handleEditProduct = (product) => {
 
   return (
     <div className="min-h-full bg-gray-900">
-      {/* Header */}
-        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-4 px-4 md:px-6 shadow-lg">
+      {/* Animated Header */}
+      <div className="animated-products-banner text-white py-5 px-4 md:px-6 shadow-2xl border-b border-gray-800">
         <div className="max-w-7xl mx-auto flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <h1 className="text-2xl font-bold">Admin Panel</h1>
-            <span className="bg-white/20 px-3 py-1 rounded-full text-sm w-fit">
+            <h1 className="text-2xl font-extrabold animated-banner-title">Admin Panel</h1>
+            <span className="bg-orange-500/10 border border-orange-500/30 text-orange-400 font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider w-fit backdrop-blur-sm">
               Welcome, {adminUser?.name}
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={() => onPageChange("Home")}
-              className="flex items-center gap-2 hover:bg-white/20 px-3 py-2 rounded-lg transition text-sm sm:text-base"
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-xl transition text-sm font-semibold border border-gray-700 shadow-md cursor-pointer"
             >
-              <Home size={20} />
+              <Home size={18} />
               <span>View Site</span>
             </button>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 hover:bg-white/20 px-3 py-2 rounded-lg transition text-sm sm:text-base"
+              className="flex items-center gap-2 bg-red-600/90 hover:bg-red-600 text-white px-4 py-2 rounded-xl transition text-sm font-semibold border border-red-500/50 shadow-md cursor-pointer"
             >
-              <LogOut size={20} />
+              <LogOut size={18} />
               <span>Logout</span>
             </button>
           </div>
@@ -1205,6 +1275,18 @@ const handleEditProduct = (product) => {
               <TrendingUp className="inline mr-2" size={20} />
               Ads
             </button>
+            <button
+              onClick={() => setActiveTab("messages")}
+              className={`px-4 sm:px-6 py-4 font-semibold transition relative shrink-0 flex items-center gap-2 ${activeTab === "messages" ? "border-b-2 border-gray-600 text-gray-600" : "text-gray-600 hover:text-gray-800"}`}
+            >
+              <MessageSquare className="inline" size={20} />
+              Messages
+              {customerMessages.filter(m => m.status === "Unread").length > 0 && (
+                <span className="bg-amber-500 text-black text-xs px-2 py-0.5 rounded-full font-bold">
+                  {customerMessages.filter(m => m.status === "Unread").length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -1250,7 +1332,7 @@ const handleEditProduct = (product) => {
                         <p className="font-semibold">{product.name}</p>
                         <p className="text-gray-600 text-sm">{product.category}</p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm ${product.stock === 0 ? "bg-gray-100 text-gray-800" : "bg-gray-200 text-gray-800"}`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${product.stock === 0 ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-amber-500/20 text-amber-300 border border-amber-500/40"}`}>
                         {product.stock} left
                       </span>
                     </div>
@@ -1306,7 +1388,7 @@ const handleEditProduct = (product) => {
                           {coupon.usage_limit > 0 ? `${coupon.total_used || 0}/${coupon.usage_limit}` : "Unlimited"}
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded-full text-sm ${coupon.is_active ? "bg-gray-200 text-gray-800" : "bg-gray-100 text-gray-600"}`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${coupon.is_active ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" : "bg-red-500/20 text-red-400 border border-red-500/40"}`}>
                             {coupon.is_active ? "Active" : "Inactive"}
                           </span>
                         </td>
@@ -1391,7 +1473,7 @@ const handleEditProduct = (product) => {
                       <td className="px-6 py-4 text-gray-600">{product.category}</td>
                       <td className="px-6 py-4 text-gray-600">₹{product.price?.toLocaleString()}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-sm ${product.stock === 0 ? "bg-gray-100 text-gray-800" : product.stock < 10 ? "bg-gray-200 text-gray-800" : "bg-gray-300 text-gray-800"}`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${product.stock === 0 ? "bg-red-500/20 text-red-400 border border-red-500/40" : product.stock < 10 ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"}`}>
                           {product.stock}
                         </span>
                       </td>
@@ -1461,7 +1543,21 @@ const handleEditProduct = (product) => {
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-gray-600 text-sm">{order.payment_method || "Prepaid"}</td>
+                      <td className="px-6 py-4">
+                        <select
+                          value={order.payment_status || "Paid"}
+                          onChange={(e) => handleTogglePaymentStatus(order._id || order.id, e.target.value)}
+                          title="Select Payment Status (Admin Only)"
+                          className={`px-3 py-1.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border shadow-sm cursor-pointer outline-none transition ${
+                            (order.payment_status || "Paid") === "Paid"
+                              ? "bg-emerald-950 text-emerald-300 border-emerald-500/60 focus:ring-2 focus:ring-emerald-500"
+                              : "bg-red-950 text-red-300 border-red-500/60 focus:ring-2 focus:ring-red-500"
+                          }`}
+                        >
+                          <option value="Paid" className="bg-gray-900 text-emerald-400 font-bold">✓ Paid</option>
+                          <option value="Unpaid" className="bg-gray-900 text-red-400 font-bold">✕ Unpaid</option>
+                        </select>
+                      </td>
                       <td className="px-6 py-4 text-gray-600">
                         {order.tracking_location || "Not set"}
                       </td>
@@ -1570,7 +1666,7 @@ const handleEditProduct = (product) => {
                         {coupon.usage_limit > 0 ? `${coupon.total_used || 0}/${coupon.usage_limit}` : "Unlimited"}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-sm ${coupon.is_active ? "bg-gray-200 text-gray-800" : "bg-gray-100 text-gray-600"}`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${coupon.is_active ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" : "bg-red-500/20 text-red-400 border border-red-500/40"}`}>
                           {coupon.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
@@ -1648,7 +1744,7 @@ const handleEditProduct = (product) => {
                       <td className="px-6 py-4 text-gray-600 capitalize">{ad.target_audience?.replace("_", " ") || "All"}</td>
                       <td className="px-6 py-4 text-gray-600">{ad.priority || 0}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-sm ${ad.is_active ? "bg-gray-200 text-gray-800" : "bg-gray-100 text-gray-600"}`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${ad.is_active ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" : "bg-red-500/20 text-red-400 border border-red-500/40"}`}>
                           {ad.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
@@ -1725,19 +1821,19 @@ const handleEditProduct = (product) => {
                       <td className="px-6 py-4 text-gray-600">{user.zipCode || user.zip_code || "-"}</td>
                       <td className="px-6 py-4 text-gray-600">{user.country || "-"}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-sm ${user.role === "admin" ? "bg-gray-800 text-white" : "bg-gray-200 text-gray-700"}`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${user.role === "admin" ? "bg-purple-500/20 text-purple-300 border border-purple-500/40" : "bg-blue-500/20 text-blue-300 border border-blue-500/40"}`}>
                           {user.role}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className={`px-3 py-1 rounded-full text-sm ${user.coupon_locked ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${user.coupon_locked ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"}`}>
                             {user.coupon_locked ? "Blocked" : "Allowed"}
                           </span>
                           <button
                             type="button"
                             onClick={() => handleCouponAccessChange(user.id || user._id, !user.coupon_locked)}
-                            className="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold"
+                            className={`px-3 py-1 rounded-xl text-xs font-bold transition border ${user.coupon_locked ? "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40" : "bg-red-600/20 hover:bg-red-600/30 text-red-300 border-red-500/40"}`}
                           >
                             {user.coupon_locked ? "Allow" : "Block"}
                           </button>
@@ -1759,6 +1855,125 @@ const handleEditProduct = (product) => {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Messages Tab */}
+        {activeTab === "messages" && (
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-xl p-6 text-white">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Customer Enquiries & Messages</h2>
+                <p className="text-gray-400 text-sm">Messages sent by customers via "Contact Seller"</p>
+              </div>
+              <span className="bg-gray-800 text-gray-300 text-xs px-3 py-1.5 rounded-full font-bold border border-gray-700">
+                Total Messages: {customerMessages.length}
+              </span>
+            </div>
+
+            {customerMessages.length === 0 ? (
+              <div className="text-center py-12 bg-gray-950/60 rounded-xl border border-gray-800">
+                <MessageSquare size={48} className="mx-auto text-gray-600 mb-3" />
+                <p className="text-gray-400 font-medium">No customer messages received yet.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-800 text-gray-400 text-xs uppercase tracking-wider">
+                      <th className="p-4">Customer</th>
+                      <th className="p-4">Product</th>
+                      <th className="p-4">Message</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Date</th>
+                      <th className="p-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800 text-sm">
+                    {customerMessages.map((msg) => (
+                      <tr key={msg._id || msg.id} className="hover:bg-gray-800/50 transition">
+                        <td className="p-4">
+                          <p className="font-bold text-white">{msg.user_name || "Customer"}</p>
+                          <p className="text-xs text-gray-400">{msg.user_email}</p>
+                        </td>
+                        <td className="p-4">
+                          <span className="bg-gray-800 text-orange-400 px-2.5 py-1 rounded-lg text-xs font-semibold border border-gray-700">
+                            {msg.product_name || "General"}
+                          </span>
+                        </td>
+                        <td className="p-4 max-w-md">
+                          <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                        </td>
+                        <td className="p-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${
+                            msg.status === "Unread"
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                              : msg.status === "Replied"
+                              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                              : "bg-blue-500/20 text-blue-300 border border-blue-500/40"
+                          }`}>
+                            {msg.status || "Unread"}
+                          </span>
+                        </td>
+                        <td className="p-4 text-xs text-gray-400">
+                          {msg.created_at ? new Date(msg.created_at).toLocaleString() : "-"}
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <a
+                              href={`mailto:${msg.user_email}?subject=Re: Inquiry for ${msg.product_name}`}
+                              onClick={async () => {
+                                const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
+                                await fetch(`${API_BASE_URL}/admin/messages/${msg._id}/status`, {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ status: "Replied" })
+                                });
+                                setCustomerMessages(prev => prev.map(m => m._id === msg._id ? { ...m, status: "Replied" } : m));
+                              }}
+                              className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                            >
+                              <Mail size={14} /> Reply
+                            </a>
+                            {msg.status === "Unread" && (
+                              <button
+                                onClick={async () => {
+                                  const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
+                                  await fetch(`${API_BASE_URL}/admin/messages/${msg._id}/status`, {
+                                    method: "PUT",
+                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({ status: "Read" })
+                                  });
+                                  setCustomerMessages(prev => prev.map(m => m._id === msg._id ? { ...m, status: "Read" } : m));
+                                }}
+                                className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-xl text-xs font-bold transition border border-gray-700"
+                              >
+                                Mark Read
+                              </button>
+                            )}
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm("Are you sure you want to delete this message?")) return;
+                                const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
+                                await fetch(`${API_BASE_URL}/admin/messages/${msg._id}`, {
+                                  method: "DELETE",
+                                  headers: { Authorization: `Bearer ${token}` }
+                                });
+                                setCustomerMessages(prev => prev.filter(m => m._id !== msg._id));
+                              }}
+                              className="bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/40 p-1.5 rounded-xl transition"
+                              title="Delete Message"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
@@ -2242,31 +2457,57 @@ const handleEditProduct = (product) => {
                     required
                   />
                 </div>
+                <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-1">Category</label>
+                <select
+                  value={productCategories.includes(productForm.category) ? productForm.category : (productForm.category ? "Custom" : "")}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "Custom") {
+                      setProductForm((prev) => ({ ...prev, category: "" }));
+                    } else {
+                      const isNoSize = ["watches", "watch", "belts", "belt", "accessories", "accessory", "wallets", "wallet", "perfumes", "perfume", "bags", "bag", "electronics"].some(cat => val.toLowerCase().includes(cat));
+                      setProductForm((prev) => ({
+                        ...prev,
+                        category: val,
+                        sizes: isNoSize ? "" : (prev.sizes || "7, 8, 9, 10, 11, 12")
+                      }));
+                    }
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 bg-white font-medium text-gray-800 text-sm"
+                  required
+                >
+                  <option value="" disabled>Select a Category...</option>
+                  {productCategories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                  <option value="Custom">+ Add New Custom Category...</option>
+                </select>
+
+                {(!productCategories.includes(productForm.category) || productForm.category === "") && (
+                  <input
+                    type="text"
+                    value={productForm.category || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const isNoSize = ["watches", "watch", "belts", "belt", "accessories", "accessory", "wallets", "wallet", "perfumes", "perfume", "bags", "bag", "electronics"].some(cat => val.toLowerCase().includes(cat));
+                      setProductForm((prev) => ({
+                        ...prev,
+                        category: val,
+                        sizes: isNoSize ? "" : (prev.sizes || "7, 8, 9, 10, 11, 12")
+                      }));
+                    }}
+                    className="w-full px-4 py-2 mt-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-sm"
+                    placeholder="Enter custom category name"
+                    required
+                  />
+                )}
+              </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <input
-                  list="admin-product-categories"
-                  value={productForm.category}
-                  onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-500"
-                  placeholder="Select or type category"
-                  required
-                />
-                <datalist id="admin-product-categories">
-                  {productCategories.map((category) => (
-                    <option key={category} value={category} />
-                  ))}
-                </datalist>
-                {productCategories.length > 0 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Saved categories: {productCategories.join(", ")}
-                  </p>
-                )}
-              </div>
-
-<div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
                   value={productForm.description}
@@ -2310,6 +2551,54 @@ const handleEditProduct = (product) => {
                 </label>
                 <p className="text-xs text-gray-500">Enable to show this product in the featured/highlight section on the home page.</p>
               </div>
+
+              {/* Size Field: Only show if category requires sizes (e.g. Sneakers) */}
+              {!["watches", "watch", "belts", "belt", "accessories", "accessory", "wallets", "wallet", "perfumes", "perfume", "bags", "bag", "electronics"].some(cat => (productForm.category || "").toLowerCase().includes(cat)) ? (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-1">Available Sizes (US)</label>
+                  <input
+                    type="text"
+                    value={productForm.sizes || ""}
+                    onChange={(e) => setProductForm({ ...productForm, sizes: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-sm"
+                    placeholder="e.g., 7, 8, 9, 10, 11, 12"
+                  />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {["6", "7", "8", "9", "10", "11", "12"].map((size) => {
+                      const currentSizes = (productForm.sizes || "").replace(/[[\]"'\\]/g, "").split(",").map(s => s.trim()).filter(Boolean);
+                      const isSelected = currentSizes.includes(size);
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => {
+                            const newSizes = isSelected
+                              ? currentSizes.filter(s => s !== size)
+                              : [...currentSizes, size];
+                            setProductForm({ ...productForm, sizes: newSizes.join(", ") });
+                          }}
+                          className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition ${
+                            isSelected
+                              ? "bg-gray-800 text-white border-gray-700 shadow-sm"
+                              : "bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Toggle buttons above or type custom comma-separated sizes.</p>
+                </div>
+              ) : (
+                <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Size Option</span>
+                  <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                    Sizes not applicable for "{productForm.category}" category.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Images</label>

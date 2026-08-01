@@ -12,6 +12,7 @@ import Footer from "./Footer";
 import SearchPage from "./SearchPage";
 import AddAddress from "./AddAddress";
 import ResetPassword from "./ResetPassword";
+import MobileBottomNav from "./MobileBottomNav";
 import './App.css';
 
 function loadStoredUser() {
@@ -44,6 +45,13 @@ export default function App() {
   const [cart, setCart] = useState([]);
   const [user, setUser] = useState(() => loadStoredUser());
   const [resetToken, setResetToken] = useState(resetTokenFromUrl);
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.className = `theme-${theme}`;
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     if (initialPageFromUrl === "ResetPassword" && resetTokenFromUrl) {
@@ -210,7 +218,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-950 to-black flex flex-col">
+    <div className={`app-shell theme-${theme} min-h-screen flex flex-col`}>
       {/* Header with Navigation */}
       <Header 
         currentPage={currentPage} 
@@ -218,6 +226,8 @@ export default function App() {
         cartCount={cart.length}
         user={user}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={() => setTheme(currentTheme => currentTheme === "dark" ? "light" : "dark")}
       />
 
       {/* Page Content - grows to fill available space */}
@@ -227,6 +237,13 @@ export default function App() {
 
       {/* Footer */}
       <Footer onPageChange={handlePageChange} />
+
+      {/* Mobile Bottom Sticky Navigation */}
+      <MobileBottomNav 
+        currentPage={currentPage}
+        onPageChange={handlePageChange}
+        cartCount={cart.length}
+      />
     </div>
   );
 }

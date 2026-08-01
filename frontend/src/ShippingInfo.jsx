@@ -65,8 +65,8 @@ const ShippingInfo = () => {
       <div>
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Contact Us</h3>
         <p>For any shipping-related queries, please contact us at:</p>
-        <p className="mt-1">Email: veluxkicks11@gmail.com</p>
-        <p>Phone: +91 7676526044</p>
+        <p className="mt-1">Email: <a href="mailto:veluxkicks11@gmail.com" className="text-blue-600 hover:underline font-medium">veluxkicks11@gmail.com</a></p>
+        <p>Phone: <a href="tel:+917676526644" className="text-blue-600 hover:underline font-medium">+91 76765 26644</a></p>
       </div>
     </div>
   );

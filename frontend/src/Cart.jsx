@@ -14,6 +14,14 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
   const [couponError, setCouponError] = useState("");
   const [couponLocked, setCouponLocked] = useState(false);
   const [checkingLock, setCheckingLock] = useState(false);
+  const [selectedAddressType, setSelectedAddressType] = useState("profile");
+  const [customAddress, setCustomAddress] = useState({
+    address: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    country: "India"
+  });
 
   useEffect(() => {
     const storedCoupon = localStorage.getItem('appliedCoupon');
@@ -59,10 +67,24 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
   // Maximum allowed items per user
   const MAX_ITEMS = 5;
 
-  // Get user's saved address from signup
+  // Get user's saved address from signup/profile
   const userAddress = user ?
-    `${user.address || ''}, ${user.city || ''}, ${user.state || ''} ${user.zipCode || ''}, ${user.country || ''}`.replace(/^, |, $/g, '')
+    `${user.address || ''}, ${user.city || ''}, ${user.state || ''} ${user.zipCode || ''}, ${user.country || ''}`.replace(/^, |, $/g, '').replace(/^,\s*|,\s*$/g, '')
     : "";
+
+  const getEffectiveShippingAddress = () => {
+    if (selectedAddressType === "profile" && userAddress.trim()) {
+      return userAddress.trim();
+    }
+    const parts = [
+      customAddress.address,
+      customAddress.city,
+      customAddress.state,
+      customAddress.zipCode,
+      customAddress.country
+    ].map(p => (p || "").trim()).filter(Boolean);
+    return parts.join(", ");
+  };
 
   const updateQuantity = (index, delta) => {
     const newCart = [...cart];
@@ -143,9 +165,9 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
       return;
     }
 
-    if (!userAddress.trim()) {
-      alert("Please complete your address in your profile before ordering");
-      onPageChange("Profile");
+    const shippingAddress = getEffectiveShippingAddress();
+    if (!shippingAddress || shippingAddress.length < 5) {
+      alert("Please select your saved address or enter a delivery address before proceeding to checkout.");
       return;
     }
 
@@ -184,7 +206,7 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
           items: items,
           subtotal: total,
           total: grandTotal,
-          address: userAddress,
+          address: shippingAddress,
           coupon_code: appliedCoupon?.code || "",
           discount: discountAmount
         }),
@@ -212,11 +234,19 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
 
   return (
     <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
-      {/* Page Header */}
-        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-12 px-4 shadow-lg">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-4xl font-bold mb-2">Shopping Cart</h1>
-           <p className="text-gray-200">Review and manage your items</p>
+      {/* Animated Page Header Banner */}
+      <div className="animated-products-banner py-12 px-4 border-b border-gray-800 shadow-2xl relative">
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+        <div className="max-w-6xl mx-auto relative z-10 space-y-1">
+          <span className="inline-block px-3 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-400 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-sm animate-bounce mb-2">
+            Your Cart Items
+          </span>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight animated-banner-title drop-shadow-md">
+            Shopping Cart
+          </h1>
+          <p className="text-gray-300 text-sm md:text-base font-medium">
+            Review and manage your selected items
+          </p>
         </div>
       </div>
 
@@ -375,37 +405,141 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                   Payment method: <strong>Prepaid only</strong>. Cash on delivery is not available.
                 </div>
 
-                {/* Saved Delivery Address */}
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Delivery Address (from your profile)
-                  </label>
-                  <div className="w-full p-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-700 h-24">
-                    {userAddress ? (
-                      <p className="text-sm">{userAddress}</p>
-                    ) : (
-                      <p className="text-sm text-gray-500">No address found. Please add your address in your profile.</p>
-                    )}
+                {/* Delivery Address Selection */}
+                <div className="mb-6 bg-gray-900 border border-gray-800 p-5 rounded-2xl text-white shadow-xl">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-bold text-white uppercase tracking-wider">
+                      Delivery Address
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => onPageChange("Profile")}
+                      className="text-xs text-orange-400 hover:underline font-semibold"
+                    >
+                      Manage Addresses
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onPageChange("Profile")}
-                     className="text-sm text-gray-600 hover:text-gray-800 mt-1 underline"
+
+                  {/* Option 1: Saved Profile Address */}
+                  {userAddress.trim() ? (
+                    <label
+                      onClick={() => setSelectedAddressType("profile")}
+                      className={`block p-3.5 rounded-xl border-2 cursor-pointer transition mb-3 ${
+                        selectedAddressType === "profile"
+                          ? "border-orange-500 bg-orange-500/10 text-white shadow-md"
+                          : "border-gray-800 bg-gray-950 text-gray-400 hover:border-gray-700"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="radio"
+                          name="addressType"
+                          checked={selectedAddressType === "profile"}
+                          onChange={() => setSelectedAddressType("profile")}
+                          className="mt-1 text-orange-500 focus:ring-orange-500"
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-0.5">Use Saved Profile Address</p>
+                          <p className="text-sm font-semibold text-white">{userAddress}</p>
+                        </div>
+                      </div>
+                    </label>
+                  ) : null}
+
+                  {/* Option 2: Enter Custom Shipping Address */}
+                  <label
+                    onClick={() => setSelectedAddressType("custom")}
+                    className={`block p-3.5 rounded-xl border-2 cursor-pointer transition ${
+                      selectedAddressType === "custom" || !userAddress.trim()
+                        ? "border-orange-500 bg-orange-500/10 text-white shadow-md"
+                        : "border-gray-800 bg-gray-950 text-gray-400 hover:border-gray-700"
+                    }`}
                   >
-                    Edit address in profile
-                  </button>
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="radio"
+                        name="addressType"
+                        checked={selectedAddressType === "custom" || !userAddress.trim()}
+                        onChange={() => setSelectedAddressType("custom")}
+                        className="mt-1 text-orange-500 focus:ring-orange-500"
+                      />
+                      <div className="w-full">
+                        <p className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-1">
+                          {userAddress.trim() ? "Deliver to a Different Address" : "Enter Delivery Address"}
+                        </p>
+
+                        {(selectedAddressType === "custom" || !userAddress.trim()) && (
+                          <div className="space-y-2 mt-3" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              placeholder="House / Flat No., Street, Landmark"
+                              value={customAddress.address}
+                              onChange={(e) => setCustomAddress({ ...customAddress, address: e.target.value })}
+                              className="w-full p-2.5 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 rounded-lg text-xs focus:ring-1 focus:ring-orange-500"
+                              required
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="text"
+                                placeholder="City"
+                                value={customAddress.city}
+                                onChange={(e) => setCustomAddress({ ...customAddress, city: e.target.value })}
+                                className="w-full p-2.5 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 rounded-lg text-xs focus:ring-1 focus:ring-orange-500"
+                                required
+                              />
+                              <input
+                                type="text"
+                                placeholder="State"
+                                value={customAddress.state}
+                                onChange={(e) => setCustomAddress({ ...customAddress, state: e.target.value })}
+                                className="w-full p-2.5 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 rounded-lg text-xs focus:ring-1 focus:ring-orange-500"
+                                required
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="text"
+                                placeholder="ZIP / Pincode"
+                                value={customAddress.zipCode}
+                                onChange={(e) => setCustomAddress({ ...customAddress, zipCode: e.target.value })}
+                                className="w-full p-2.5 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 rounded-lg text-xs focus:ring-1 focus:ring-orange-500"
+                                required
+                              />
+                              <input
+                                type="text"
+                                placeholder="Country"
+                                value={customAddress.country}
+                                onChange={(e) => setCustomAddress({ ...customAddress, country: e.target.value })}
+                                className="w-full p-2.5 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 rounded-lg text-xs focus:ring-1 focus:ring-orange-500"
+                                required
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </label>
                 </div>
 
                 {orderSuccess ? (
-                  <div className="w-full bg-gray-500 text-white py-3 rounded-lg font-bold text-center mb-3">
+                  <div className="w-full bg-emerald-600 text-white py-3 rounded-lg font-bold text-center mb-3">
                     ✓ Order Placed Successfully!
                   </div>
                 ) : (
                   <button
                     onClick={handleCheckout}
-                    disabled={loading || cart.length === 0 || !userAddress.trim()}
-                    className="w-full bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 rounded-lg font-bold hover:shadow-lg transition mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={loading || cart.length === 0 || !getEffectiveShippingAddress().trim()}
+                    className={`w-full py-3.5 rounded-xl font-bold transition mb-3 ${
+                      getEffectiveShippingAddress().trim()
+                        ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:shadow-lg active:scale-98 cursor-pointer"
+                        : "bg-gray-800 text-gray-400 border border-gray-700 cursor-not-allowed opacity-60"
+                    }`}
                   >
-                    {loading ? "Placing Order..." : "Proceed to Checkout"}
+                    {loading
+                      ? "Placing Order..."
+                      : getEffectiveShippingAddress().trim()
+                      ? "Proceed to Checkout"
+                      : "⚠️ Add or Select Delivery Address to Proceed"}
                   </button>
                 )}
 
