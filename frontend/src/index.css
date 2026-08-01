@@ -125,9 +125,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .animated-banner-title {
   background: linear-gradient(90deg, #ffffff 0%, #f97316 35%, #fbbf24 65%, #ffffff 100%);
   background-size: 200% auto;
-  color: transparent;
-  -webkit-background-clip: text;
-  background-clip: text;
+  color: transparent !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
   animation: title-shimmer 5s linear infinite;
 }
 

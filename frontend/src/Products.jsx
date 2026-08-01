@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { productsData } from "./productsData";
-import { Heart } from "lucide-react";
+import { Heart, ShoppingCart, Eye } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
 
@@ -326,18 +326,18 @@ export default function Products({ onAddToCart, onPageChange }) {
                        </span>
                      )}
                    </div>
-                   <div className="grid grid-cols-2 gap-2">
+                   <div className="grid grid-cols-2 gap-2.5 mt-3">
                     <button
                       onClick={() => onPageChange("ProductDetails", product._id || product.id)}
-                      className="bg-gradient-to-r from-gray-600 to-gray-700 text-white py-2 rounded-xl hover:shadow-lg transition font-semibold text-sm"
+                      className="bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700 py-2.5 rounded-xl transition font-bold text-xs sm:text-sm flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      View
+                      <Eye size={16} /> Details
                     </button>
                     <button
                       onClick={() => handleAddToCart(product)}
-                      className="bg-gray-200 text-gray-800 py-2 rounded-xl hover:bg-gray-300 transition font-semibold text-sm"
+                      className="bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 hover:from-orange-600 hover:to-amber-600 text-white py-2.5 rounded-xl transition shadow-md hover:shadow-orange-500/20 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
                     >
-                      Add Cart
+                      <ShoppingCart size={16} /> Add to Cart
                     </button>
                   </div>
                 </div>

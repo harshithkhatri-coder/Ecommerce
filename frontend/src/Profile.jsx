@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { User, Mail, Phone, MapPin, Edit2, Save, X, Heart, ShoppingBag, LogOut, Plus, Camera } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
+import { lookupPincode } from "./pincodeHelper";
 
 export default function Profile({ onPageChange }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -34,20 +35,24 @@ export default function Profile({ onPageChange }) {
   }, []);
 
   const fetchUserData = async () => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user) {
-      onPageChange("Home");
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    if (!user || (!user.id && !user._id)) {
+      setLoading(false);
+      onPageChange("Login");
       return;
     }
 
+    const userId = user.id || user._id;
+
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/profile/${user.id}`);
+      const response = await fetch(`${API_BASE_URL}/auth/profile/${userId}`);
       const data = await response.json();
-      if (data.success) {
+      const resolvedEmail = data?.data?.email || user.email || "";
+      if (data.success && data.data) {
         const userData = data.data;
         setProfileData({
-          name: userData.name || "",
-          email: userData.email || "",
+          name: userData.name || user.name || "",
+          email: resolvedEmail,
           phone: userData.phone || "",
           address: userData.address || "",
           city: userData.city || "",
@@ -57,8 +62,8 @@ export default function Profile({ onPageChange }) {
           avatar: userData.avatar || user.avatar || "",
         });
         setEditData({
-          name: userData.name || "",
-          email: userData.email || "",
+          name: userData.name || user.name || "",
+          email: resolvedEmail,
           phone: userData.phone || "",
           address: userData.address || "",
           city: userData.city || "",
@@ -67,9 +72,15 @@ export default function Profile({ onPageChange }) {
           country: userData.country || "",
           avatar: userData.avatar || user.avatar || "",
         });
+      } else {
+        setProfileData(prev => ({ ...prev, email: resolvedEmail }));
+        setEditData(prev => ({ ...prev, email: resolvedEmail }));
       }
     } catch (err) {
       console.error("Error fetching user data:", err);
+      const fallbackEmail = user.email || "";
+      setProfileData(prev => ({ ...prev, email: fallbackEmail }));
+      setEditData(prev => ({ ...prev, email: fallbackEmail }));
     } finally {
       setLoading(false);
     }
@@ -180,12 +191,27 @@ export default function Profile({ onPageChange }) {
     setEditData(profileData);
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = async (e) => {
     const { name, value } = e.target;
     setEditData((prev) => ({
       ...prev,
       [name]: value,
     }));
+
+    if (name === "zipCode") {
+      const cleanPin = value.replace(/\D/g, "");
+      if (cleanPin.length === 6) {
+        const info = await lookupPincode(cleanPin);
+        if (info) {
+          setEditData((prev) => ({
+            ...prev,
+            city: info.city || prev.city,
+            state: info.state || prev.state,
+            country: info.country || prev.country
+          }));
+        }
+      }
+    }
   };
 
   const handleAvatarUpload = (e) => {
@@ -261,17 +287,17 @@ export default function Profile({ onPageChange }) {
   return (
     <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
       {/* Animated Header */}
-      <div className="animated-products-banner text-white py-12 px-4 shadow-2xl border-b border-gray-800 relative">
-        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+      <div className="relative overflow-hidden bg-gradient-to-r from-gray-950 via-gray-900 to-black text-white py-12 px-6 border-b border-gray-800 shadow-2xl">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.15),transparent_50%)] pointer-events-none" />
         <div className="max-w-6xl mx-auto flex justify-between items-center relative z-10">
           <div>
-            <span className="inline-block px-3 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-400 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-sm animate-bounce mb-2">
-              User Dashboard
+            <span className="inline-block px-3 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-400 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-sm mb-2">
+              👤 User Dashboard
             </span>
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight animated-banner-title drop-shadow-md">
               My Profile
             </h1>
-            <p className="text-gray-300 text-sm md:text-base font-medium mt-1">Manage your account and preferences</p>
+            <p className="text-gray-300 text-sm md:text-base font-medium mt-1">Manage your account details, addresses, and wishlist</p>
           </div>
           <button
             onClick={handleLogout}
@@ -342,8 +368,12 @@ export default function Profile({ onPageChange }) {
                     </label>
                   </div>
                   <div>
-                    <h2 className="text-3xl font-bold text-white">{profileData.name}</h2>
-                    <p className="text-gray-400">{profileData.email}</p>
+                    <h2 className="text-3xl font-bold text-white">{profileData.name || "User"}</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Mail size={15} className="text-orange-400" />
+                      <span className="text-gray-300 font-semibold text-sm">{profileData.email || editData.email || JSON.parse(localStorage.getItem("user") || "{}")?.email || "No email"}</span>
+                      <span className="bg-gray-800 text-gray-400 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border border-gray-700">Login Email</span>
+                    </div>
                   </div>
                 </div>
                 {!isEditing && !showWishlist && (
@@ -508,14 +538,20 @@ export default function Profile({ onPageChange }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Email (cannot change)</label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={editData.email}
-                        disabled
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-                      />
+                      <label className="block text-sm font-semibold text-gray-300 mb-2 flex items-center justify-between">
+                        <span>Email Address</span>
+                        <span className="text-orange-400 font-semibold text-xs flex items-center gap-1">🔒 Login email (Cannot be changed)</span>
+                      </label>
+                      <div className="flex items-center gap-2 bg-gray-950 px-4 py-2.5 rounded-lg border border-gray-800 text-gray-400 cursor-not-allowed">
+                        <Mail size={18} className="text-orange-400 shrink-0" />
+                        <input
+                          type="email"
+                          name="email"
+                          value={editData.email || profileData.email || JSON.parse(localStorage.getItem("user") || "{}")?.email || ""}
+                          disabled
+                          className="bg-transparent w-full text-sm font-bold text-gray-300 outline-none cursor-not-allowed"
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>

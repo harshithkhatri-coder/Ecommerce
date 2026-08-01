@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Trash2, ShoppingCart, ArrowLeft, Plus, Minus, Tag } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
+import { lookupPincode } from "./pincodeHelper";
 
 export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, user }) {
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -235,17 +236,17 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
   return (
     <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
       {/* Animated Page Header Banner */}
-      <div className="animated-products-banner py-12 px-4 border-b border-gray-800 shadow-2xl relative">
-        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+      <div className="relative overflow-hidden bg-gradient-to-r from-gray-950 via-gray-900 to-black text-white py-12 px-6 border-b border-gray-800 shadow-2xl">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.15),transparent_50%)] pointer-events-none" />
         <div className="max-w-6xl mx-auto relative z-10 space-y-1">
-          <span className="inline-block px-3 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-400 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-sm animate-bounce mb-2">
-            Your Cart Items
+          <span className="inline-block px-3 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-400 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-sm mb-2">
+            🛒 Your Cart Items
           </span>
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight animated-banner-title drop-shadow-md">
             Shopping Cart
           </h1>
           <p className="text-gray-300 text-sm md:text-base font-medium">
-            Review and manage your selected items
+            Review and manage your selected items before proceeding to checkout.
           </p>
         </div>
       </div>
@@ -499,9 +500,24 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                             <div className="grid grid-cols-2 gap-2">
                               <input
                                 type="text"
-                                placeholder="ZIP / Pincode"
+                                placeholder="ZIP / Pincode (Auto-fills City/State)"
                                 value={customAddress.zipCode}
-                                onChange={(e) => setCustomAddress({ ...customAddress, zipCode: e.target.value })}
+                                onChange={async (e) => {
+                                  const val = e.target.value;
+                                  setCustomAddress(prev => ({ ...prev, zipCode: val }));
+                                  const cleanPin = val.replace(/\D/g, "");
+                                  if (cleanPin.length === 6) {
+                                    const info = await lookupPincode(cleanPin);
+                                    if (info) {
+                                      setCustomAddress(prev => ({
+                                        ...prev,
+                                        city: info.city || prev.city,
+                                        state: info.state || prev.state,
+                                        country: info.country || prev.country
+                                      }));
+                                    }
+                                  }
+                                }}
                                 className="w-full p-2.5 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 rounded-lg text-xs focus:ring-1 focus:ring-orange-500"
                                 required
                               />

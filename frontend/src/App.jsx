@@ -126,10 +126,16 @@ export default function App() {
 
 
   const handlePageChange = useCallback((page, productId = null) => {
+    if (page === "Profile" && !user) {
+      setCurrentPage("Login");
+      setSelectedProductId(null);
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
     setCurrentPage(page);
     setSelectedProductId(productId);
     window.scrollTo({ top: 0, behavior: "auto" });
-  }, []);
+  }, [user]);
 
   // Unified logout function - clears all auth
   const handleLogout = useCallback(() => {

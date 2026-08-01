@@ -11,18 +11,24 @@ function isAdminUser(user) {
 
 export default function Header({ currentPage, onPageChange, cartCount, user, onLogout, theme, onToggleTheme }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
   const handleVoiceSearch = () => {
     if (typeof window === "undefined") return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Voice search is not supported in this browser.");
+      alert("Voice search is not supported in this browser. Please type your search query.");
       return;
     }
     try {
       const recognition = new SpeechRecognition();
       recognition.lang = "en-US";
+      setIsListening(true);
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
       recognition.onresult = (event) => {
+        setIsListening(false);
         const transcript = event.results[0][0].transcript;
         if (transcript) {
           onPageChange("Search", transcript);
@@ -31,6 +37,7 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
       recognition.start();
     } catch (err) {
       console.error("Voice search error:", err);
+      setIsListening(false);
     }
   };
 
@@ -102,23 +109,28 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
 
           <button
             onClick={() => onPageChange("Search")}
-            className={`hidden sm:flex items-center gap-2 px-3.5 md:px-4 py-2 rounded-xl cursor-pointer transition-all duration-300 font-semibold text-sm border ${
+            className={`flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-xl cursor-pointer transition-all duration-300 font-semibold text-sm border ${
               currentPage === "Search"
                 ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/20 scale-[1.02]"
                 : "bg-gray-900/80 text-gray-200 border-gray-800 hover:bg-gray-800 hover:border-gray-700 hover:text-white active:scale-95"
             }`}
           >
             <Search size={18} />
-            <span>Search</span>
+            <span className="hidden xs:inline">Search</span>
           </button>
 
           <button
             type="button"
             onClick={handleVoiceSearch}
-            title="Search by voice"
-            className="hidden sm:flex items-center justify-center p-2 rounded-xl border border-gray-800 bg-gray-900/80 text-gray-300 hover:text-orange-400 hover:border-orange-500/50 hover:bg-gray-800 transition-all duration-300 active:scale-95"
+            title={isListening ? "Listening..." : "Search by voice"}
+            className={`flex items-center justify-center gap-1 p-2 md:px-3 rounded-xl border transition-all duration-300 active:scale-95 cursor-pointer ${
+              isListening
+                ? "bg-red-600 text-white border-red-500 animate-pulse shadow-lg shadow-red-500/50"
+                : "border-gray-800 bg-gray-900/80 text-gray-300 hover:text-orange-400 hover:border-orange-500/50 hover:bg-gray-800"
+            }`}
           >
-            <Mic size={18} />
+            <Mic size={18} className={isListening ? "animate-bounce text-white" : ""} />
+            {isListening && <span className="text-xs font-extrabold hidden sm:inline">Listening...</span>}
           </button>
 
           <button

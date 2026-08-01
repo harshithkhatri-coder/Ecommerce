@@ -139,6 +139,8 @@ const userSchema = new mongoose.Schema({
   role: { type: String, default: "user" },
   avatar: { type: String, default: "" },
   created_at: { type: Date, default: Date.now },
+  last_login_at: { type: Date, default: Date.now },
+  last_login_ip: { type: String, default: "" },
   reset_token_hash: { type: String, default: "" },
   reset_token_expires: { type: Date, default: null }
 });

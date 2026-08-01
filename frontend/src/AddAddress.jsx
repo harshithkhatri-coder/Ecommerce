@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { MapPin, Building, Home, Phone, Globe } from "lucide-react";
 import API_BASE_URL from "./config";
+import { lookupPincode } from "./pincodeHelper";
 
 export default function AddAddress({ onPageChange, user }) {
   const [formData, setFormData] = useState({
@@ -14,8 +15,24 @@ export default function AddAddress({ onPageChange, user }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = async (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+
+    if (name === "zipCode") {
+      const cleanPin = value.replace(/\D/g, "");
+      if (cleanPin.length === 6) {
+        const info = await lookupPincode(cleanPin);
+        if (info) {
+          setFormData(prev => ({
+            ...prev,
+            city: info.city || prev.city,
+            state: info.state || prev.state,
+            country: info.country || prev.country
+          }));
+        }
+      }
+    }
   };
 
   const handleSubmit = async (e) => {

@@ -1,27 +1,57 @@
 import React, { useState } from "react";
-import { Search as SearchIcon, ArrowLeft, X } from "lucide-react";
+import { Search as SearchIcon, ArrowLeft, X, Mic } from "lucide-react";
 import { productsData } from "./productsData";
 import { resolveImageUrl } from "./imageHelpers";
 
 export default function Search({ searchQuery, onPageChange, onAddToCart }) {
   const [query, setQuery] = useState(searchQuery || "");
   const [results, setResults] = useState([]);
+  const [isListening, setIsListening] = useState(false);
 
-  const handleSearch = (e) => {
-    const value = e.target.value;
-    setQuery(value);
-
-    if (value.trim() === "") {
+  const performFilter = (text) => {
+    setQuery(text);
+    if (!text.trim()) {
       setResults([]);
       return;
     }
-
     const filtered = productsData.filter(
       (product) =>
-        product.name.toLowerCase().includes(value.toLowerCase()) ||
-        product.category.toLowerCase().includes(value.toLowerCase())
+        product.name.toLowerCase().includes(text.toLowerCase()) ||
+        product.category.toLowerCase().includes(text.toLowerCase())
     );
     setResults(filtered);
+  };
+
+  const handleSearch = (e) => {
+    performFilter(e.target.value);
+  };
+
+  const handleVoiceSearch = () => {
+    if (typeof window === "undefined") return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice search is not supported in this browser. Please type your search query.");
+      return;
+    }
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      setIsListening(true);
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+      recognition.onresult = (event) => {
+        setIsListening(false);
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          performFilter(transcript);
+        }
+      };
+      recognition.start();
+    } catch (err) {
+      console.error("Voice search error:", err);
+      setIsListening(false);
+    }
   };
 
   const clearSearch = () => {
@@ -32,38 +62,59 @@ export default function Search({ searchQuery, onPageChange, onAddToCart }) {
   return (
     <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950">
       {/* Animated Header */}
-      <div className="animated-products-banner text-white py-6 px-4 shadow-2xl sticky top-0 z-40 border-b border-gray-800">
-        <div className="max-w-6xl mx-auto">
+      <div className="relative overflow-hidden bg-gradient-to-r from-gray-950 via-gray-900 to-black text-white py-6 px-4 border-b border-gray-800 shadow-2xl sticky top-0 z-40">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.15),transparent_50%)] pointer-events-none" />
+        <div className="max-w-6xl mx-auto relative z-10">
           <div className="flex items-center gap-4 mb-4">
             <button
               onClick={() => onPageChange("Home")}
-              className="flex items-center gap-2 hover:bg-gray-800 px-3 py-2 rounded-xl transition text-gray-300 hover:text-white"
+              className="flex items-center gap-2 bg-gray-900/80 hover:bg-orange-500 hover:text-white border border-gray-700 px-3 py-1.5 rounded-xl transition text-gray-200 font-bold text-sm shadow-md active:scale-95 cursor-pointer"
             >
-              <ArrowLeft size={24} />
+              <ArrowLeft size={20} />
               <span className="hidden sm:inline">Back</span>
             </button>
-            <h1 className="text-2xl md:text-3xl font-extrabold flex-grow animated-banner-title">Search Products</h1>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold uppercase tracking-wider">
+                🔍 Search Catalogue
+              </span>
+            </div>
           </div>
 
-          {/* Search Input */}
-          <div className="relative">
+          {/* Search Input with Mic */}
+          <div className="relative flex items-center">
             <SearchIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <input
               type="text"
               value={query}
               onChange={handleSearch}
-              placeholder="Search by product name or category..."
-              className="w-full pl-12 pr-12 py-3 text-gray-200 bg-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-white/50 placeholder-gray-400"
+              placeholder={isListening ? "Listening... Speak now..." : "Search by product name or category..."}
+              className={`w-full pl-12 pr-24 py-3 text-gray-200 bg-gray-800 rounded-xl outline-none focus:ring-2 placeholder-gray-400 transition ${
+                isListening ? "ring-2 ring-red-500 bg-red-950/20" : "focus:ring-orange-500"
+              }`}
               autoFocus
             />
-            {query && (
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1.5">
+              {query && (
+                <button
+                  onClick={clearSearch}
+                  className="p-1 text-gray-400 hover:text-white transition"
+                >
+                  <X size={18} />
+                </button>
+              )}
               <button
-                onClick={clearSearch}
-                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                type="button"
+                onClick={handleVoiceSearch}
+                title={isListening ? "Listening..." : "Search by voice"}
+                className={`p-1.5 rounded-lg transition active:scale-95 cursor-pointer ${
+                  isListening
+                    ? "bg-red-600 text-white animate-pulse"
+                    : "text-gray-400 hover:text-orange-400 hover:bg-gray-700"
+                }`}
               >
-                <X size={20} />
+                <Mic size={20} className={isListening ? "animate-bounce" : ""} />
               </button>
-            )}
+            </div>
           </div>
         </div>
       </div>

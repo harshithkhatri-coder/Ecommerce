@@ -500,16 +500,23 @@ const handleBuyNowWithCoupon = async () => {
   return (
     <div className="min-h-full bg-gradient-to-b from-gray-900 via-black to-gray-950 overflow-x-hidden">
       {/* Header */}
-        <div className="bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 text-white py-6 px-4 shadow-lg sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-4">
+      {/* Hero Banner Header */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-gray-950 via-gray-900 to-black text-white py-6 px-4 border-b border-gray-800 shadow-2xl sticky top-0 z-40">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.15),transparent_50%)] pointer-events-none" />
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4 relative z-10">
           <button
             onClick={() => onPageChange("Products")}
-            className="flex items-center gap-2 hover:bg-white/20 px-3 py-2 rounded-lg transition"
+            className="flex items-center gap-2 bg-gray-900/90 hover:bg-orange-500 hover:text-white border border-gray-700 px-4 py-2 rounded-xl transition text-gray-200 font-bold text-sm shadow-md active:scale-95 cursor-pointer"
           >
-            <ArrowLeft size={24} />
-            <span className="hidden sm:inline">Back to Products</span>
+            <ArrowLeft size={20} />
+            <span>Back to Products</span>
           </button>
-          <h1 className="text-2xl font-bold flex-grow">{product.name}</h1>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-extrabold uppercase tracking-widest">
+              Product Details
+            </span>
+            <h1 className="text-xl md:text-2xl font-extrabold animated-banner-title truncate max-w-md drop-shadow-md">{product.name}</h1>
+          </div>
         </div>
       </div>
 
