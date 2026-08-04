@@ -72,14 +72,23 @@ export default function Footer({ onPageChange }) {
                   </button>
                 </li>
                 <li>
-                  <button
-                    type="button"
-                    onClick={() => onPageChange && onPageChange("Products")}
-                    className="text-gray-300 hover:text-white transition"
-                  >
-                    Products
-                  </button>
-                </li>
+                   <button
+                     type="button"
+                     onClick={() => onPageChange && onPageChange("Products")}
+                     className="text-gray-300 hover:text-white transition"
+                   >
+                     Products
+                   </button>
+                 </li>
+                 <li>
+                   <button
+                     type="button"
+                     onClick={() => onPageChange && onPageChange("Coupons")}
+                     className="text-gray-300 hover:text-white transition"
+                   >
+                     Coupons
+                   </button>
+                 </li>
               </ul>
             </div>
 

@@ -411,54 +411,100 @@ app.post("/api/products/:id/reviews", async (req, res) => {
 // ===== COUPONS =====
 app.get("/api/coupons/active", async (req, res) => {
   try {
-    const { data, error } = await supabase.from("coupons").select("*").eq("is_active", true);
-    if (error) throw error;
-    res.json({ success: true, data: data || [] });
-  } catch {
+    if (isSupabaseReady) {
+      const { data, error } = await supabase.from("coupons").select("*").eq("is_active", true);
+      if (!error && data) return res.json({ success: true, data: data || [] });
+    }
+    const activeLocal = (localCoupons || []).filter(c => c.is_active !== false);
+    res.json({ success: true, data: activeLocal });
+  } catch (err) {
+    console.error("Error in /api/coupons/active:", err);
     res.status(500).json({ success: false, message: "Failed to fetch active coupons" });
   }
 });
 
 // ===== ORDERS =====
 app.post("/api/orders", async (req, res) => {
-  const { userId, items, total, address } = req.body;
-  if (!userId || !Array.isArray(items) || items.length === 0 || !total) {
-    return res.status(400).json({ success: false, message: "Missing required fields" });
+  const { userId, items, total, address, coupon_code, discount } = req.body;
+  if (!userId || !Array.isArray(items) || items.length === 0 || !total || !address || address.trim().length < 5) {
+    return res.status(400).json({ success: false, message: "Missing required fields or delivery address is too short" });
   }
 
   try {
     const orderId = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-    const { data: order, error: orderErr } = await supabase.from("orders").insert([{
-      order_id: orderId,
-      user_id: userId,
-      total: Number(total),
-      address: address || "",
-      status: "Pending",
-      payment_method: "Prepaid",
-      payment_status: "Paid"
-    }]).select().single();
+    if (isSupabaseReady) {
+      const { data: order, error: orderErr } = await supabase.from("orders").insert([{
+        order_id: orderId,
+        user_id: userId,
+        total: Number(total),
+        address: address || "",
+        status: "Pending",
+        payment_method: "Prepaid",
+        payment_status: "Paid",
+        coupon_code: coupon_code || "",
+        discount: Number(discount || 0)
+      }]).select().single();
 
-    if (orderErr) throw orderErr;
+      if (orderErr) throw orderErr;
 
-    // Insert order items
-    if (order && items.length > 0) {
-      const orderItemRecords = items.map(item => ({
-        order_id: order.id,
-        product_id: item.product_id || item.id,
-        name: item.name,
-        price: Number(item.price),
-        quantity: Number(item.quantity || 1),
-        image_url: item.image_url || ""
-      }));
-      await supabase.from("order_items").insert(orderItemRecords);
+      if (order && items.length > 0) {
+        const orderItemRecords = items.map(item => ({
+          order_id: order.id,
+          product_id: item.product_id || item.id,
+          name: item.name,
+          price: Number(item.price),
+          quantity: Number(item.quantity || 1),
+          image_url: item.image_url || ""
+        }));
+        await supabase.from("order_items").insert(orderItemRecords);
+      }
+
+      if (coupon_code) {
+        try {
+          const { data: coupon } = await supabase.from("coupons").select("id").eq("code", coupon_code).single();
+          if (coupon?.id) {
+            await supabase.from("coupon_usages").insert([{
+              coupon_id: coupon.id,
+              user_id: userId,
+              used_at: new Date()
+            }]);
+          }
+        } catch {}
+      }
+
+      res.status(201).json({
+        success: true,
+        message: "Order placed successfully",
+        data: { ...order, items }
+      });
+    } else {
+      const order = {
+        id: orderId,
+        order_id: orderId,
+        user_id: userId,
+        total: Number(total),
+        address: address || "",
+        status: "Pending",
+        payment_method: "Prepaid",
+        payment_status: "Paid",
+        coupon_code: coupon_code || "",
+        discount: Number(discount || 0),
+        items: items.map(item => ({
+          ...item,
+          order_id: orderId,
+          price: Number(item.price),
+          quantity: Number(item.quantity || 1)
+        })),
+        created_at: new Date()
+      };
+      localOrders.unshift(order);
+      res.status(201).json({
+        success: true,
+        message: "Order placed successfully",
+        data: order
+      });
     }
-
-    res.status(201).json({
-      success: true,
-      message: "Order placed successfully",
-      data: { ...order, items }
-    });
   } catch (err) {
     console.error("Order error:", err);
     res.status(500).json({ success: false, message: "Failed to place order" });
@@ -467,9 +513,12 @@ app.post("/api/orders", async (req, res) => {
 
 app.get("/api/orders/:userId", async (req, res) => {
   try {
-    const { data, error } = await supabase.from("orders").select("*").eq("user_id", req.params.userId).order("created_at", { ascending: false });
-    if (error) throw error;
-    res.json({ success: true, data: data || [], count: (data || []).length });
+    if (isSupabaseReady) {
+      const { data, error } = await supabase.from("orders").select("*").eq("user_id", req.params.userId).order("created_at", { ascending: false });
+      if (!error && data) return res.json({ success: true, data: data || [], count: (data || []).length });
+    }
+    const userOrders = localOrders.filter(o => o.user_id === req.params.userId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    res.json({ success: true, data: userOrders, count: userOrders.length });
   } catch {
     res.status(500).json({ success: false, message: "Failed to fetch orders" });
   }
@@ -478,16 +527,24 @@ app.get("/api/orders/:userId", async (req, res) => {
 // ===== WISHLIST =====
 app.get("/api/wishlist/:userId", async (req, res) => {
   try {
-    const { data: wishlistItems, error: wishErr } = await supabase.from("wishlist").select("product_id").eq("user_id", req.params.userId);
-    if (wishErr) throw wishErr;
+    if (isSupabaseReady) {
+      const { data: wishlistItems, error: wishErr } = await supabase.from("wishlist").select("product_id").eq("user_id", req.params.userId);
+      if (!wishErr && wishlistItems) {
+        const productIds = wishlistItems.map(w => w.product_id);
+        if (productIds.length === 0) return res.json({ success: true, data: [], count: 0 });
 
-    const productIds = (wishlistItems || []).map(w => w.product_id);
-    if (productIds.length === 0) return res.json({ success: true, data: [], count: 0 });
+        const { data: products, error: prodErr } = await supabase.from("products").select("*").in("id", productIds);
+        if (!prodErr && products) {
+          return res.json({ success: true, data: products || [], count: (products || []).length });
+        }
+      }
+    }
 
-    const { data: products, error: prodErr } = await supabase.from("products").select("*").in("id", productIds);
-    if (prodErr) throw prodErr;
-
-    res.json({ success: true, data: products || [], count: (products || []).length });
+    const userWishlist = localWishlist.filter(w => w.user_id === req.params.userId);
+    const productIds = userWishlist.map(w => w.product_id);
+    const allProducts = isSupabaseReady ? (await supabase.from("products").select("*")).data || [] : [];
+    const wishlistProducts = allProducts.filter(p => productIds.includes(p.id));
+    res.json({ success: true, data: wishlistProducts, count: wishlistProducts.length });
   } catch {
     res.status(500).json({ success: false, message: "Failed to fetch wishlist" });
   }
@@ -495,9 +552,17 @@ app.get("/api/wishlist/:userId", async (req, res) => {
 
 app.post("/api/wishlist/:userId/:productId", async (req, res) => {
   try {
-    await supabase.from("wishlist").upsert([{ user_id: req.params.userId, product_id: req.params.productId }]);
-    const { data: products } = await supabase.from("products").select("*").eq("id", req.params.productId);
-    res.json({ success: true, data: products || [], message: "Added to wishlist" });
+    if (isSupabaseReady) {
+      await supabase.from("wishlist").upsert([{ user_id: req.params.userId, product_id: req.params.productId }]);
+      const { data: products } = await supabase.from("products").select("*").eq("id", req.params.productId);
+      res.json({ success: true, data: products || [], message: "Added to wishlist" });
+    } else {
+      const exists = localWishlist.some(w => w.user_id === req.params.userId && w.product_id === req.params.productId);
+      if (!exists) {
+        localWishlist.push({ user_id: req.params.userId, product_id: req.params.productId });
+      }
+      res.json({ success: true, data: [], message: "Added to wishlist" });
+    }
   } catch {
     res.status(500).json({ success: false, message: "Failed to add to wishlist" });
   }
@@ -505,7 +570,14 @@ app.post("/api/wishlist/:userId/:productId", async (req, res) => {
 
 app.delete("/api/wishlist/:userId/:productId", async (req, res) => {
   try {
-    await supabase.from("wishlist").delete().eq("user_id", req.params.userId).eq("product_id", req.params.productId);
+    if (isSupabaseReady) {
+      await supabase.from("wishlist").delete().eq("user_id", req.params.userId).eq("product_id", req.params.productId);
+    } else {
+      const index = localWishlist.findIndex(w => w.user_id === req.params.userId && w.product_id === req.params.productId);
+      if (index >= 0) {
+        localWishlist.splice(index, 1);
+      }
+    }
     res.json({ success: true, message: "Removed from wishlist" });
   } catch {
     res.status(500).json({ success: false, message: "Failed to remove from wishlist" });
@@ -829,6 +901,8 @@ let localCoupons = [
   { id: "c2", _id: "c2", code: "SAVE20", discount_type: "percentage", discount_value: 20, min_order_value: 500, max_discount: 200, is_active: true, target_audience: "all", usage_limit_per_user: 1 },
   { id: "c3", _id: "c3", code: "FLAT50", discount_type: "fixed", discount_value: 50, min_order_value: 300, max_discount: 0, is_active: true, target_audience: "all", usage_limit_per_user: 1 }
 ];
+let localOrders = [];
+let localWishlist = [];
 
 app.get("/api/admin/coupons", adminAuth, async (req, res) => {
   try {
@@ -958,6 +1032,104 @@ app.post("/api/admin/coupon-locks/:userId/:action", adminAuth, async (req, res) 
   res.json({ success: true, message: "Lock status updated" });
 });
 
+app.post("/api/coupons/validate", async (req, res) => {
+  try {
+    const { code, subtotal, cartItems, userId } = req.body;
+    const normalizedCode = (code || "").trim().toUpperCase();
+
+    let coupon = null;
+
+    if (isSupabaseReady) {
+      const { data } = await supabase.from("coupons").select("*").eq("code", normalizedCode).eq("is_active", true).single();
+      coupon = data;
+    }
+
+    if (!coupon) {
+      coupon = localCoupons.find(c => c.code.toUpperCase() === normalizedCode && c.is_active);
+    }
+
+    if (!coupon) {
+      return res.json({ success: false, message: "Invalid coupon code" });
+    }
+
+    const minOrder = Number(coupon.min_order_value || 0);
+    if (subtotal < minOrder) {
+      return res.json({ success: false, message: `Minimum order value of ₹${minOrder} required` });
+    }
+
+    if (coupon.target_audience === "specific_users" && coupon.allowed_user_ids && userId) {
+      const allowed = Array.isArray(coupon.allowed_user_ids)
+        ? coupon.allowed_user_ids
+        : String(coupon.allowed_user_ids).split(",").map(id => id.trim()).filter(Boolean);
+      if (!allowed.includes(userId)) {
+        return res.json({ success: false, message: "You are not authorized to use this coupon" });
+      }
+    }
+
+    let discountAmount = 0;
+    if (coupon.discount_type === "percentage") {
+      discountAmount = Math.round((subtotal * Number(coupon.discount_value || 0)) / 100);
+      const maxDiscount = Number(coupon.max_discount || 0);
+      if (maxDiscount > 0) {
+        discountAmount = Math.min(discountAmount, maxDiscount);
+      }
+    } else {
+      discountAmount = Number(coupon.discount_value || 0);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...coupon,
+        discount_amount: discountAmount
+      }
+    });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to validate coupon" });
+  }
+});
+
+app.get("/api/coupon-locks/me", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.json({ success: true, data: { locked: false } });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let userId = null;
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userId = decoded.id;
+    } catch {
+      if (isSupabaseReady) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser(token);
+          userId = user?.id;
+        } catch {}
+      }
+    }
+
+    if (!userId) {
+      return res.json({ success: true, data: { locked: false } });
+    }
+
+    if (isSupabaseReady) {
+      try {
+        const { data } = await supabase.from("coupon_locks").select("*").eq("user_id", userId).single();
+        if (data) {
+          return res.json({ success: true, data: { locked: data.locked || false } });
+        }
+      } catch {}
+    }
+
+    res.json({ success: true, data: { locked: false } });
+  } catch {
+    res.json({ success: true, data: { locked: false } });
+  }
+});
+
 
 // ===== TEST ROUTE =====
 app.get("/api/test", (req, res) => {
@@ -968,6 +1140,8 @@ app.get("/api/test", (req, res) => {
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
 });
+
+module.exports = app;
 
 // ===== START SERVER =====
 async function startServer() {
@@ -989,8 +1163,10 @@ async function startServer() {
 
   } catch (err) {
     console.error("❌ Server Startup Failed:", err);
-    process.exit(1);
   }
 }
 
-startServer();
+if (require.main === module || (!process.env.VERCEL && process.env.NODE_ENV !== "production")) {
+  startServer();
+}
+

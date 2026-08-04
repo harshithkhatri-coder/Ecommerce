@@ -1143,46 +1143,59 @@ const handleBuyNowWithCoupon = async () => {
                       const currentOrderTotal = product.price * quantity;
                       const isEligible = currentOrderTotal >= minOrder;
 
-                      return (
-                        <div
-                          key={coupon._id || coupon.id}
-                          onClick={() => {
-                            if (!couponLocked) {
-                              setCouponCode(coupon.code);
-                              setCouponError("");
-                            }
-                          }}
-                          className={`p-3 border rounded-xl text-left transition cursor-pointer flex flex-col justify-between ${
-                            couponCode === coupon.code
-                              ? "border-orange-500 bg-gray-800"
-                              : "border-gray-800 bg-gray-950 hover:border-gray-700"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono font-bold text-white bg-gray-800 px-2 py-0.5 rounded border border-gray-700 text-sm">
-                              {coupon.code}
-                            </span>
-                            <span className="text-xs font-semibold text-emerald-400">
-                              {coupon.discount_type === "percentage"
-                                ? `${coupon.discount_value}% OFF`
-                                : `₹${coupon.discount_value} OFF`}
-                            </span>
-                          </div>
-                          
-                          <div className="mt-2 flex items-center justify-between text-xs">
-                            <span className="text-gray-400">
-                              Min purchase: ₹{minOrder}
-                            </span>
-                            {isEligible ? (
-                              <span className="text-emerald-400 font-medium">Eligible</span>
-                            ) : (
-                              <span className="text-red-400 font-medium">
-                                Buy ₹{minOrder - currentOrderTotal} more to apply
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
+                       return (
+                         <div
+                           key={coupon._id || coupon.id}
+                           onClick={() => {
+                             if (!couponLocked) {
+                               setCouponCode(coupon.code);
+                               setCouponError("");
+                             }
+                           }}
+                           className={`p-3 border rounded-xl text-left transition-all duration-300 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+                             couponCode === coupon.code
+                               ? "border-orange-500 bg-gray-800 shadow-md scale-[1.02]"
+                               : "border-gray-800 bg-gray-950 hover:border-gray-700"
+                           }`}
+                         >
+                           {couponCode === coupon.code && (
+                             <div className="absolute top-2 right-2 animate-pulse">
+                               <div className="w-2.5 h-2.5 rounded-full bg-orange-500 shadow-sm"></div>
+                             </div>
+                           )}
+                           <div className="flex items-center justify-between">
+                             <span className="font-mono font-bold text-white bg-gray-800 px-2 py-0.5 rounded border border-gray-700 text-sm">
+                               {coupon.code}
+                             </span>
+                             <span className="text-xs font-semibold text-emerald-400">
+                               {coupon.discount_type === "percentage"
+                                 ? `${coupon.discount_value}% OFF`
+                                 : `₹${coupon.discount_value} OFF`}
+                             </span>
+                           </div>
+                           
+                           <div className="mt-2 flex items-center justify-between text-xs">
+                             <span className="text-gray-400">
+                               Min purchase: ₹{minOrder}
+                             </span>
+                             {isEligible ? (
+                               <span className="text-emerald-400 font-medium">Eligible</span>
+                             ) : (
+                               <span className="text-red-400 font-medium">
+                                 Buy ₹{minOrder - currentOrderTotal} more to apply
+                               </span>
+                             )}
+                           </div>
+                           {couponCode === coupon.code && (
+                             <div className="mt-2 pt-2 border-t border-gray-700 flex items-center gap-1 text-orange-400 text-xs font-semibold animate-fadeIn">
+                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                               </svg>
+                               Selected
+                             </div>
+                           )}
+                         </div>
+                       );
                     })}
                   </div>
                 </div>

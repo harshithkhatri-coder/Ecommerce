@@ -15,6 +15,8 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
   const [couponError, setCouponError] = useState("");
   const [couponLocked, setCouponLocked] = useState(false);
   const [checkingLock, setCheckingLock] = useState(false);
+  const [activeCoupons, setActiveCoupons] = useState([]);
+  const [couponsLoading, setCouponsLoading] = useState(false);
   const [selectedAddressType, setSelectedAddressType] = useState("profile");
   const [customAddress, setCustomAddress] = useState({
     address: "",
@@ -59,6 +61,25 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
     };
 
     checkCouponLock();
+  }, []);
+
+  useEffect(() => {
+    const fetchActiveCoupons = async () => {
+      setCouponsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/coupons/active`);
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          setActiveCoupons(data.data);
+        }
+      } catch (err) {
+        console.error("Error fetching active coupons:", err);
+      } finally {
+        setCouponsLoading(false);
+      }
+    };
+
+    fetchActiveCoupons();
   }, []);
 
   const discountAmount = appliedCoupon ? appliedCoupon.discount_amount : 0;
@@ -391,6 +412,76 @@ export default function Cart({ cart, setCart, onRemoveFromCart, onPageChange, us
                     </div>
                   )}
                   {couponError && <p className="text-red-500 text-xs mt-1">{couponError}</p>}
+
+                  {!appliedCoupon && activeCoupons.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Available Coupons</h4>
+                      {couponsLoading ? (
+                        <p className="text-xs text-gray-400">Loading coupons...</p>
+                      ) : (
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                          {activeCoupons.map((coupon) => {
+                            const minOrder = Number(coupon.min_order_value || 0);
+                            const isEligible = total >= minOrder;
+                            const isSelected = couponCode === coupon.code;
+
+                            return (
+                              <div
+                                key={coupon._id || coupon.id}
+                                onClick={() => {
+                                  if (!couponLocked) {
+                                    setCouponCode(coupon.code);
+                                    setCouponError("");
+                                  }
+                                }}
+                                className={`p-3 border rounded-lg text-left transition-all duration-300 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+                                  isSelected
+                                    ? "border-orange-500 bg-orange-50 shadow-md scale-[1.02]"
+                                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                                }`}
+                              >
+                                {isSelected && (
+                                  <div className="absolute top-2 right-2 animate-pulse">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-orange-500 shadow-sm"></div>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between">
+                                  <span className="font-mono font-bold text-gray-800 bg-gray-100 px-2 py-0.5 rounded border border-gray-200 text-sm">
+                                    {coupon.code}
+                                  </span>
+                                  <span className="text-xs font-semibold text-emerald-600">
+                                    {coupon.discount_type === "percentage"
+                                      ? `${coupon.discount_value}% OFF`
+                                      : `₹${coupon.discount_value} OFF`}
+                                  </span>
+                                </div>
+                                <div className="mt-2 flex items-center justify-between text-xs">
+                                  <span className="text-gray-500">
+                                    Min purchase: ₹{minOrder}
+                                  </span>
+                                  {isEligible ? (
+                                    <span className="text-emerald-600 font-medium">Eligible</span>
+                                  ) : (
+                                    <span className="text-red-500 font-medium">
+                                      Buy ₹{minOrder - total} more
+                                    </span>
+                                  )}
+                                </div>
+                                {isSelected && (
+                                  <div className="mt-2 pt-2 border-t border-orange-200 flex items-center gap-1 text-orange-700 text-xs font-semibold animate-fadeIn">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Selected
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t-2 border-gray-200 pt-4 mb-6">
