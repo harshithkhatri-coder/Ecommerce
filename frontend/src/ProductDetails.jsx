@@ -722,7 +722,7 @@ const handleBuyNowWithCoupon = async () => {
                 {sizes.length > 0 ? (
                   <>
                     <label className="block text-lg font-bold text-white mb-3">
-                      Select Size {categoryLower.includes("belt") ? "(Waist Size in Inches)" : "(US)"}
+                      Select Size {categoryLower.includes("belt") ? "(Waist Size in Inches)" : ""}
                     </label>
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                       {sizes.map((size) => (

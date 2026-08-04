@@ -54,9 +54,9 @@ export default function Carousel() {
 
   useEffect(() => {
     if (carouselImages.length === 0) {
-        setCarouselImages(defaultImages);
-        return;
-      }
+      setCarouselImages(defaultImages);
+      return;
+    }
   }, [carouselImages]);
 
   useEffect(() => {
@@ -77,13 +77,13 @@ export default function Carousel() {
   };
 
   return (
-    <div className="relative w-full h-48 md:h-64 lg:h-96 bg-gradient-to-r from-gray-700 via-gray-600 to-gray-500 overflow-hidden">
+    <div className="relative w-full h-48 md:h-64 lg:h-96 bg-gradient-to-r from-gray-900 via-black to-gray-900 overflow-hidden">
       <div className="relative w-full h-full flex items-center justify-center">
         {carouselImages.map((image, index) => (
           <div
             key={image.id}
             className={`absolute w-full h-full transition-opacity duration-1000 ${
-              index === currentSlide ? "opacity-100" : "opacity-0"
+              index === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
           >
             <img
@@ -91,8 +91,8 @@ export default function Carousel() {
               alt={image.title}
               className="w-full h-full object-cover floating-image"
             />
-            <div className="absolute inset-0 bg-black/30 flex items-center justify-center p-4">
-              <h2 className="text-white text-2xl md:text-2xl md:text-4xl font-bold text-center">
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4">
+              <h2 className="text-white text-3xl md:text-5xl font-extrabold text-center drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] tracking-tight">
                 {image.title}
               </h2>
             </div>
@@ -101,15 +101,15 @@ export default function Carousel() {
 
         <button
           onClick={goToPrevious}
-          className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/50 hover:bg-white/80 rounded-full p-3 transition z-10"
+          className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full p-3 transition z-10 cursor-pointer"
         >
-          <ChevronLeft size={24} className="text-gray-800" />
+          <ChevronLeft size={24} className="text-white" />
         </button>
         <button
           onClick={goToNext}
-          className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/50 hover:bg-white/80 rounded-full p-3 transition z-10"
+          className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full p-3 transition z-10 cursor-pointer"
         >
-          <ChevronRight size={24} className="text-gray-800" />
+          <ChevronRight size={24} className="text-white" />
         </button>
 
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
@@ -117,10 +117,10 @@ export default function Carousel() {
             <button
               key={index}
               onClick={() => setCurrentSlide(index)}
-              className={`w-3 h-3 rounded-full transition ${
+              className={`h-3 rounded-full transition-all duration-300 ${
                 index === currentSlide
-                  ? "bg-white w-8"
-                  : "bg-white/50 hover:bg-white/75"
+                  ? "bg-orange-500 w-8"
+                  : "bg-white/60 hover:bg-white w-3"
               }`}
             />
           ))}

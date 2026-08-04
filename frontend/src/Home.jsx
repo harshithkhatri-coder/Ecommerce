@@ -54,13 +54,14 @@ export default function Home({ cart, onAddToCart, onPageChange, user }) {
 
       {/* Highlight Strip - just a few beautiful product images */}
       <div className="max-w-5xl mx-auto px-6 py-12">
-        <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-gray-800 via-gray-600 to-gray-500 bg-clip-text text-transparent mb-4 md:mb-6 text-center">
+        <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-4 md:mb-6 text-center">
           Discover Our Signature Styles
         </h2>
-        <p className="text-center text-gray-300 mb-10 max-w-2xl mx-auto">
+        <p className="text-center text-gray-200 mb-10 max-w-2xl mx-auto font-medium">
           A quick peek at a few of our most loved designs. Explore the full
           collection in the products section.
         </p>
+
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {highlightProducts.map((product, index) => (

@@ -1,32 +1,42 @@
-## Start the Application
+# 🚀 How to Run the Application (Zero Cloud Accounts Required!)
 
-### Backend (Terminal 1)
+This application runs **100% locally** using an embedded local database. **No MongoDB Atlas or Supabase accounts are needed!**
+
+---
+
+## Quick Start (Run Both Frontend & Backend)
+
+From the project root directory (`d:\react\ecommerce`), run:
+
+```powershell
+npm run dev
+```
+
+---
+
+## Running Separately
+
+### Backend Server (Terminal 1)
 ```powershell
 cd D:\react\ecommerce\backend
 npm start
 ```
-Expected output:
-```
-✅ Server running on http://localhost:5000
-✅ Connected to MongoDB
+*Expected Output:*
+```text
+✅ Local JSON Database initialized at backend/data/db.json
+✅ Default Admin user created: admin@veluxkicks.com
+🚀 Server running on port 5000 (Zero Cloud Accounts Required)
 ```
 
-### Frontend (Terminal 2)
+### Frontend Application (Terminal 2)
 ```powershell
 cd D:\react\ecommerce\frontend
 npm start
 ```
-Expected output:
-```
-Local:            http://localhost:3000
-```
-
-Then open browser to: http://localhost:3000
+*Open Browser:* [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## To run both together (from project root):
-```powershell
-cd D:\react\ecommerce
-npm run dev
-```
+## Admin Credentials
+- **Email**: `admin@veluxkicks.com`
+- **Password**: `admin@12341`

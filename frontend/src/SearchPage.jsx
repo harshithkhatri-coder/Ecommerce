@@ -1,26 +1,47 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Search as SearchIcon, ArrowLeft, X, Mic } from "lucide-react";
-import { productsData } from "./productsData";
+import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
+import { productsData as fallbackProducts } from "./productsData";
 
 export default function Search({ searchQuery, onPageChange, onAddToCart }) {
   const [query, setQuery] = useState(searchQuery || "");
+  const [allProducts, setAllProducts] = useState(fallbackProducts);
   const [results, setResults] = useState([]);
   const [isListening, setIsListening] = useState(false);
 
-  const performFilter = (text) => {
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/products`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setAllProducts(data.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const performFilter = (text, list = allProducts) => {
     setQuery(text);
     if (!text.trim()) {
       setResults([]);
       return;
     }
-    const filtered = productsData.filter(
+    const filtered = list.filter(
       (product) =>
-        product.name.toLowerCase().includes(text.toLowerCase()) ||
-        product.category.toLowerCase().includes(text.toLowerCase())
+        (product.name || "").toLowerCase().includes(text.toLowerCase()) ||
+        (product.category || "").toLowerCase().includes(text.toLowerCase())
     );
     setResults(filtered);
   };
+
+  useEffect(() => {
+    if (query) {
+      performFilter(query, allProducts);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allProducts]);
+
 
   const handleSearch = (e) => {
     performFilter(e.target.value);
@@ -152,11 +173,11 @@ export default function Search({ searchQuery, onPageChange, onAddToCart }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
               {results.map((product) => (
                 <div
-                  key={product.id}
+                  key={product.id || product._id}
                   className="bg-white rounded-2xl shadow-md p-4 hover:shadow-xl transition transform hover:scale-105 cursor-pointer"
                 >
                   <div
-                    onClick={() => onPageChange("ProductDetails", product.id)}
+                    onClick={() => onPageChange("ProductDetails", product.id || product._id)}
                     className="relative overflow-hidden rounded-xl mb-4 cursor-pointer"
                   >
                     <img
@@ -164,24 +185,24 @@ export default function Search({ searchQuery, onPageChange, onAddToCart }) {
                       alt={product.name}
                       className="w-full h-48 object-cover hover:scale-110 transition"
                     />
-                     <div className="absolute top-2 right-2 bg-gray-600 text-white px-2 py-1 rounded text-xs font-semibold">
+                    <div className="absolute top-2 right-2 bg-gray-600 text-white px-2 py-1 rounded text-xs font-semibold">
                       {product.category}
                     </div>
                   </div>
 
                   <h2
-                    onClick={() => onPageChange("ProductDetails", product.id)}
-                     className="text-lg font-semibold text-gray-800 mb-2 cursor-pointer hover:text-gray-700 transition line-clamp-2"
+                    onClick={() => onPageChange("ProductDetails", product.id || product._id)}
+                    className="text-lg font-semibold text-gray-800 mb-2 cursor-pointer hover:text-gray-700 transition line-clamp-2"
                   >
                     {product.name}
                   </h2>
 
-                   <p className="text-2xl font-bold text-gray-800 mb-3">₹{product.price}</p>
+                  <p className="text-2xl font-bold text-gray-800 mb-3">₹{product.price}</p>
 
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => onPageChange("ProductDetails", product.id)}
-                       className="bg-gradient-to-r from-gray-700 to-gray-800 text-white py-2 rounded-xl hover:shadow-lg transition font-semibold text-sm"
+                      onClick={() => onPageChange("ProductDetails", product.id || product._id)}
+                      className="bg-gradient-to-r from-gray-700 to-gray-800 text-white py-2 rounded-xl hover:shadow-lg transition font-semibold text-sm"
                     >
                       View
                     </button>

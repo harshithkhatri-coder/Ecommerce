@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ShoppingCart, User, Search, Menu, X, Moon, Sun, Mic, LogOut } from "lucide-react";
+import { ShoppingCart, User, Search, Menu, X, Moon, Sun, Mic } from "lucide-react";
 
 const ADMIN_LOGIN_EMAIL = "admin@veluxkicks.com";
 
@@ -67,9 +67,10 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
               alt="VELUX KICKS Logo"
               className="w-10 h-10 rounded-full border-2 border-orange-500/80 object-cover group-hover:scale-105 group-hover:border-orange-400 transition-all duration-300 shadow-md shadow-orange-500/20"
             />
-            <span className="text-lg font-extrabold tracking-wide hidden sm:inline bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent group-hover:from-orange-400 group-hover:to-amber-300 transition-all duration-300">
+            <span className="text-lg font-extrabold tracking-wide hidden sm:inline text-white group-hover:text-orange-400 transition-all duration-300">
               VELUX KICKS
             </span>
+
           </button>
 
           {/* Desktop Navigation */}
@@ -164,17 +165,7 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
                 )}
                 <span className="hidden sm:inline">{user.name}</span>
               </button>
-              {onLogout && (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  title="Logout"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-300 font-semibold text-sm border bg-red-950/60 text-red-300 border-red-800/60 hover:bg-red-900/80 hover:text-white active:scale-95 shadow-sm cursor-pointer"
-                >
-                  <LogOut size={16} />
-                  <span className="hidden md:inline">Logout</span>
-                </button>
-              )}
+
             </div>
           ) : (
             <button
@@ -241,18 +232,10 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
             </button>
 
             {user ? (
-              onLogout && (
-                <button
-                  onClick={() => {
-                    onLogout();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="font-semibold text-sm transition-all duration-200 px-4 py-3 rounded-xl text-left flex items-center gap-2.5 text-red-400 hover:bg-red-950/40 hover:text-red-300"
-                >
-                  <LogOut size={18} />
-                  <span>Logout</span>
-                </button>
-              )
+              <div className="px-4 py-3 rounded-xl text-left flex items-center gap-2.5 text-gray-400">
+                <User size={18} />
+                <span>{user.name}</span>
+              </div>
             ) : (
               <button
                 onClick={() => {

@@ -1,6 +1,22 @@
 import React, { useState } from "react";
 import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import API_BASE_URL from "./config";
+import { supabase } from "./supabaseClient";
+
+const SESSION_DURATION = 2 * 60 * 60 * 1000;
+
+function createSession(userData, token) {
+  const session = {
+    user: userData,
+    token: token,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + SESSION_DURATION,
+  };
+  localStorage.setItem("session", JSON.stringify(session));
+  localStorage.setItem("user", JSON.stringify(userData));
+  localStorage.setItem("token", token);
+  return session;
+}
 
 export default function Login({ onPageChange }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -24,6 +40,17 @@ export default function Login({ onPageChange }) {
     if (!emailToReset) {
       alert("Please enter your email.");
       return;
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(emailToReset);
+      if (!error) {
+        alert("Password reset email sent via Supabase!");
+        setIsForgotPassword(false);
+        return;
+      }
+    } catch {
+      // Fallback
     }
 
     const endpointCandidates = ["/auth/forgot-password", "/auth/forgotPassword"];
@@ -66,6 +93,13 @@ export default function Login({ onPageChange }) {
     e.preventDefault();
     setLoading(true);
 
+    const hasValidKey = Boolean(
+      process.env.REACT_APP_SUPABASE_ANON_KEY &&
+      !process.env.REACT_APP_SUPABASE_ANON_KEY.includes("your-anon-key") &&
+      !process.env.REACT_APP_SUPABASE_ANON_KEY.includes("http") &&
+      process.env.REACT_APP_SUPABASE_ANON_KEY.startsWith("eyJ")
+    );
+
     try {
       if (isForgotPassword) {
         await handleForgotPassword();
@@ -74,6 +108,33 @@ export default function Login({ onPageChange }) {
       }
 
       if (isLogin) {
+        if (hasValidKey) {
+          try {
+            const { data: supaData, error: supaErr } = await supabase.auth.signInWithPassword({
+              email: formData.email,
+              password: formData.password
+            });
+
+            if (!supaErr && supaData?.user) {
+              const userObj = {
+                id: supaData.user.id,
+                _id: supaData.user.id,
+                name: supaData.user.user_metadata?.name || formData.email.split("@")[0],
+                email: formData.email,
+                role: supaData.user.email === "admin@veluxkicks.com" ? "admin" : "user",
+                token: supaData.session?.access_token
+              };
+              createSession(userObj, userObj.token);
+              window.dispatchEvent(new Event("userLoggedIn"));
+              onPageChange("Home");
+              setLoading(false);
+              return;
+            }
+          } catch {
+            // Fallback to Backend API
+          }
+        }
+
         const res = await fetch(`${API_BASE_URL}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -82,8 +143,7 @@ export default function Login({ onPageChange }) {
         const data = await res.json();
 
         if (data.success) {
-          localStorage.setItem("user", JSON.stringify(data.data));
-          localStorage.setItem("token", data.data.token);
+          createSession(data.data, data.data.token);
           window.dispatchEvent(new Event("userLoggedIn"));
           onPageChange("Home");
         } else {
@@ -97,6 +157,35 @@ export default function Login({ onPageChange }) {
           alert("Passwords do not match!");
           setLoading(false);
           return;
+        }
+
+        if (hasValidKey) {
+          try {
+            const { data: supaData, error: supaErr } = await supabase.auth.signUp({
+              email: formData.email,
+              password: formData.password,
+              options: { data: { name: formData.name } }
+            });
+
+            if (!supaErr && supaData?.user) {
+              alert("Account created! Logging in...");
+              const userObj = {
+                id: supaData.user.id,
+                _id: supaData.user.id,
+                name: formData.name,
+                email: formData.email,
+                role: "user",
+                token: supaData.session?.access_token
+              };
+              createSession(userObj, userObj.token);
+              window.dispatchEvent(new Event("userLoggedIn"));
+              onPageChange("AddAddress");
+              setLoading(false);
+              return;
+            }
+          } catch {
+            // Fallback to Backend API
+          }
         }
 
         const res = await fetch(`${API_BASE_URL}/auth/register`, {
@@ -119,8 +208,7 @@ export default function Login({ onPageChange }) {
           });
           const loginData = await loginRes.json();
           if (loginData.success) {
-            localStorage.setItem("user", JSON.stringify(loginData.data));
-            localStorage.setItem("token", loginData.data.token);
+            createSession(loginData.data, loginData.data.token);
             window.dispatchEvent(new Event("userLoggedIn"));
             onPageChange("AddAddress");
           }
@@ -128,8 +216,9 @@ export default function Login({ onPageChange }) {
           alert(data.message || "Registration failed");
         }
       }
+
     } catch (err) {
-      alert("Cannot connect to server. Make sure backend is running.");
+      alert("Error logging in / registering. Please check credentials.");
     }
     setLoading(false);
   };
