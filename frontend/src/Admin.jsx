@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
+import { productsData } from "./productsData";
 
 const DEFAULT_CAROUSEL_IMAGES = [
   { id: 1, url: "/images/SHOE1.jpg", title: "BRANDED SHOES" },
@@ -518,10 +519,16 @@ export default function Admin({ onPageChange, onLogout }) {
       // Products
       if (productsRes.status === "fulfilled" && productsRes.value.ok) {
         const d = await productsRes.value.json();
-        if (d.success) {
-          setProducts(d.data || []);
-          setStats(prev => ({ ...prev, totalProducts: (d.data || []).length }));
+        if (d.success && Array.isArray(d.data) && d.data.length > 0) {
+          setProducts(d.data);
+          setStats(prev => ({ ...prev, totalProducts: d.data.length }));
+        } else {
+          setProducts(productsData);
+          setStats(prev => ({ ...prev, totalProducts: productsData.length }));
         }
+      } else {
+        setProducts(productsData);
+        setStats(prev => ({ ...prev, totalProducts: productsData.length }));
       }
 
       // Carousel
