@@ -168,30 +168,17 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
 
             </div>
             ) : (
-              <>
-                <button
-                  onClick={() => onPageChange("Signup")}
-                  className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-semibold text-sm border ${
-                    currentPage === "Signup"
-                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/20 scale-[1.02]"
-                      : "bg-gradient-to-r from-gray-800 to-gray-900 text-white border-gray-700 hover:from-gray-700 hover:to-gray-800 active:scale-95 shadow-md"
-                  }`}
-                >
-                  <User size={18} />
-                  <span>Sign Up</span>
-                </button>
-                <button
-                  onClick={() => onPageChange("Login")}
-                  className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-semibold text-sm border ${
-                    currentPage === "Login"
-                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/20 scale-[1.02]"
-                      : "bg-gradient-to-r from-gray-800 to-gray-900 text-white border-gray-700 hover:from-gray-700 hover:to-gray-800 active:scale-95 shadow-md"
-                  }`}
-                >
-                  <User size={18} />
-                  <span>Login</span>
-                </button>
-              </>
+              <button
+                onClick={() => onPageChange("Login")}
+                className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-semibold text-sm border ${
+                  currentPage === "Login"
+                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400 shadow-md shadow-orange-500/20 scale-[1.02]"
+                    : "bg-gradient-to-r from-gray-800 to-gray-900 text-white border-gray-700 hover:from-gray-700 hover:to-gray-800 active:scale-95 shadow-md"
+                }`}
+              >
+                <User size={18} />
+                <span>Login</span>
+              </button>
             )}
 
           {/* Mobile Menu Button */}
@@ -250,36 +237,20 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
                 <span>{user.name}</span>
               </div>
             ) : (
-              <>
-                <button
-                  onClick={() => {
-                    onPageChange("Signup");
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`font-semibold text-sm transition-all duration-200 px-4 py-3 rounded-xl text-left flex items-center gap-2.5 ${
-                    currentPage === "Signup"
-                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-md shadow-orange-500/25"
-                      : "text-gray-300 hover:bg-gray-900 hover:text-white"
-                  }`}
-                >
-                  <User size={18} />
-                  <span>Sign Up</span>
-                </button>
-                <button
-                  onClick={() => {
-                    onPageChange("Login");
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`font-semibold text-sm transition-all duration-200 px-4 py-3 rounded-xl text-left flex items-center gap-2.5 ${
-                    currentPage === "Login"
-                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-md shadow-orange-500/25"
-                      : "text-gray-300 hover:bg-gray-900 hover:text-white"
-                  }`}
-                >
-                  <User size={18} />
-                  <span>Login</span>
-                </button>
-              </>
+              <button
+                onClick={() => {
+                  onPageChange("Login");
+                  setMobileMenuOpen(false);
+                }}
+                className={`font-semibold text-sm transition-all duration-200 px-4 py-3 rounded-xl text-left flex items-center gap-2.5 ${
+                  currentPage === "Login"
+                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-md shadow-orange-500/25"
+                    : "text-gray-300 hover:bg-gray-900 hover:text-white"
+                }`}
+              >
+                <User size={18} />
+                <span>Login</span>
+              </button>
             )}
           </nav>
         </div>

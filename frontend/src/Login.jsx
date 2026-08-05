@@ -343,11 +343,12 @@ export default function Login({ onPageChange, defaultIsLogin = true }) {
                     Forgot Password?
                   </button>
                 )}
-                <p className="text-gray-400 text-sm">
+                <p className="text-white text-sm">
                   {isLogin ? "Don't have an account?" : "Already have an account?"}
                   <button
+                    type="button"
                     onClick={() => setIsLogin(!isLogin)}
-                    className="text-white ml-1 underline"
+                    className="text-orange-400 ml-1 underline font-semibold"
                   >
                     {isLogin ? "Sign Up" : "Login"}
                   </button>
