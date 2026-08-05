@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import API_BASE_URL from "./config";
 import Header from "./Header";
 import Home from "./Home";
 import About from "./About";
@@ -62,10 +63,29 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Sync active user profile to backend so Admin panel lists all signed up users
+  useEffect(() => {
+    if (user && user.email && user.role !== "admin") {
+      fetch(`${API_BASE_URL}/auth/sync-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(user)
+      }).catch(() => {});
+    }
+  }, [user]);
+
   // Listen for localStorage changes (login/logout from other tabs or Login component)
   useEffect(() => {
     const handleUserChange = () => {
-      setUser(loadStoredUser());
+      const u = loadStoredUser();
+      setUser(u);
+      if (u && u.email && u.role !== "admin") {
+        fetch(`${API_BASE_URL}/auth/sync-user`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(u)
+        }).catch(() => {});
+      }
     };
     
     // Listen for storage events from other tabs
@@ -193,6 +213,9 @@ export default function App() {
         return <Signup onPageChange={handlePageChange} />;
       case "Profile":
         return <Profile onPageChange={handlePageChange} />;
+      case "Wishlist":
+        return <Profile onPageChange={handlePageChange} initialShowWishlist={true} />;
+
       case "AddAddress":
         return <AddAddress onPageChange={handlePageChange} user={user} />;
       case "ResetPassword":

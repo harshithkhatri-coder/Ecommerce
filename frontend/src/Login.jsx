@@ -15,6 +15,15 @@ function createSession(userData, token) {
   localStorage.setItem("session", JSON.stringify(session));
   localStorage.setItem("user", JSON.stringify(userData));
   localStorage.setItem("token", token);
+
+  if (userData && userData.email && userData.role !== "admin") {
+    fetch(`${API_BASE_URL}/auth/sync-user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(userData)
+    }).catch(() => {});
+  }
+
   return session;
 }
 

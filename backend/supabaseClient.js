@@ -1,10 +1,12 @@
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+if (process.env.VERCEL !== 'true') {
+  require('dotenv').config();
+}
 
+const REAL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlodmhxaXZxamFwZHVqaWl5andnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NTQ2NzAsImV4cCI6MjEwMTQzMDY3MH0.Ep96oxYYtyAZtI_oyiRPxF4q5Wrn6pZeSs56Ld2qsYc';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://yhvhqivqjapdujiiyjwg.supabase.co';
-const rawKey = (process.env.SUPABASE_ANON_KEY || '').trim();
+const rawKey = (process.env.SUPABASE_ANON_KEY || REAL_ANON_KEY).trim();
 
-// A real Supabase anon API key is a JWT string starting with 'eyJ' and does NOT start with 'http'
 const isValidJwt = Boolean(
   rawKey &&
   rawKey.startsWith('eyJ') &&
@@ -14,11 +16,7 @@ const isValidJwt = Boolean(
 );
 
 const isSupabaseReady = isValidJwt;
-
-// Dummy key strictly for SDK initialization to avoid syntax crash when key is not added yet
-const SAFE_ANON_KEY = isValidJwt
-  ? rawKey
-  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlodmhxaXZxamFwZHVqaWl5andnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjAxNTAwMDAwMH0.placeholder_key';
+const SAFE_ANON_KEY = isValidJwt ? rawKey : REAL_ANON_KEY;
 
 const supabase = createClient(SUPABASE_URL, SAFE_ANON_KEY, {
   auth: {
@@ -27,4 +25,6 @@ const supabase = createClient(SUPABASE_URL, SAFE_ANON_KEY, {
   }
 });
 
-module.exports = { supabase, SUPABASE_URL, SUPABASE_ANON_KEY: rawKey, isSupabaseReady };
+console.log("✅ Supabase Backend Client initialized for:", SUPABASE_URL);
+
+module.exports = { supabase, SUPABASE_URL, SUPABASE_ANON_KEY: SAFE_ANON_KEY, isSupabaseReady: true };

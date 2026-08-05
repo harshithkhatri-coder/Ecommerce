@@ -4,10 +4,45 @@ import API_BASE_URL from "./config";
 import { productsData } from "./productsData";
 import { resolveImageUrl } from "./imageHelpers";
 import { updatePageSEO, injectProductJsonLd } from "./seoHelpers";
+import { getLocalWishlist, setLocalWishlist } from "./wishlistHelpers";
+
+const DEFAULT_COUPONS = [
+  {
+    id: "c1",
+    _id: "c1",
+    code: "WELCOME10",
+    discount_type: "percentage",
+    discount_value: 10,
+    min_order_value: 0,
+    max_discount: 0,
+    is_active: true
+  },
+  {
+    id: "c2",
+    _id: "c2",
+    code: "SAVE20",
+    discount_type: "percentage",
+    discount_value: 20,
+    min_order_value: 500,
+    max_discount: 200,
+    is_active: true
+  },
+  {
+    id: "c3",
+    _id: "c3",
+    code: "FLAT50",
+    discount_type: "fixed",
+    discount_value: 50,
+    min_order_value: 300,
+    max_discount: 0,
+    is_active: true
+  }
+];
 
 export default function ProductDetails({ productId, onPageChange, onAddToCart, user }) {
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
+
   const [selectedSize, setSelectedSize] = useState("9");
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [newReview, setNewReview] = useState({ user: '', rating: 5, comment: '' });
@@ -23,7 +58,7 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart, u
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [couponLocked, setCouponLocked] = useState(false);
-  const [activeCoupons, setActiveCoupons] = useState([]);
+  const [activeCoupons, setActiveCoupons] = useState(DEFAULT_COUPONS);
 
   // Interactive Zoom State
   const [isZooming, setIsZooming] = useState(false);
@@ -46,7 +81,6 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart, u
         if (response.ok && data.success) {
           setProduct(data.data);
         } else {
-          // API returned no product, try static data fallback
           const staticProduct = productsData.find(
             p => (p._id === productId) || (p.id === productId) || (String(p.id) === String(productId))
           );
@@ -56,7 +90,6 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart, u
         }
       } catch (error) {
         console.error('Error fetching product:', error);
-        // Try to find in static data on error
         const staticProduct = productsData.find(
           p => (p._id === productId) || (p.id === productId) || (String(p.id) === String(productId))
         );
@@ -83,18 +116,46 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart, u
     const fetchWishlist = async () => {
       const user = JSON.parse(localStorage.getItem("user"));
       if (!user) return;
-      const userId = user.id || user._id;
+      const userId = (user.email || user.id || user._id || "").toLowerCase().trim();
       if (!userId) return;
 
+      const cached = getLocalWishlist(user);
+      const targetPId = product ? (product._id || product.id) : productId;
+      if (cached && cached.length > 0) {
+        const isWishlisted = cached.some(item => {
+          const iId = String(item._id || item.id || item || "").toLowerCase().replace(/^prod_/, "");
+          const tId = String(targetPId || "").toLowerCase().replace(/^prod_/, "");
+          return (iId && tId && iId === tId) || String(item._id || item.id || item) === String(targetPId);
+        });
+        setIsInWishlist(isWishlisted);
+      }
+
       try {
-        const response = await fetch(`${API_BASE_URL}/wishlist/${userId}`);
+        const response = await fetch(`${API_BASE_URL}/wishlist/${encodeURIComponent(userId)}`);
         const data = await response.json();
-        if (data.success) {
-          const wishlistIds = (data.data || []).map(item => String(item._id || item.id));
-          setIsInWishlist(wishlistIds.includes(String(productId)));
+        if (data.success && Array.isArray(data.data)) {
+          const isWishlisted = data.data.some(item => {
+            const iId = String(item._id || item.id || "").toLowerCase().replace(/^prod_/, "");
+            const tId = String(targetPId || "").toLowerCase().replace(/^prod_/, "");
+            return (iId && tId && iId === tId) || String(item._id || item.id) === String(targetPId);
+          });
+          setIsInWishlist(isWishlisted);
+          setLocalWishlist(user, data.data);
         }
       } catch (error) {
         console.error('Error fetching wishlist:', error);
+      }
+    };
+
+    const fetchCoupons = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/coupons/active`);
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          setActiveCoupons(data.data.filter(c => c.is_active !== false));
+        }
+      } catch (error) {
+        console.error('Error fetching coupons:', error);
       }
     };
 
@@ -102,8 +163,28 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart, u
       fetchProduct();
       fetchReviews();
       fetchWishlist();
+      fetchCoupons();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
+
+  const handleMouseMoveZoom = (e) => {
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - left) / width) * 100;
+    const y = ((e.clientY - top) / height) * 100;
+    setZoomPos({ x, y });
+    setIsZooming(true);
+  };
+
+  const handleMouseLeaveZoom = () => {
+    setIsZooming(false);
+  };
+
+  const getEstimatedDeliveryDate = () => {
+    const target = new Date();
+    target.setDate(target.getDate() + 4);
+    return target.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  };
 
   // Track Recently Viewed & Inject SEO
   useEffect(() => {
@@ -124,25 +205,8 @@ export default function ProductDetails({ productId, onPageChange, onAddToCart, u
     } catch (err) {
       console.error("Error setting recently viewed:", err);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product]);
-
-  const handleMouseMoveZoom = (e) => {
-    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - left) / width) * 100;
-    const y = ((e.clientY - top) / height) * 100;
-    setZoomPos({ x, y });
-    setIsZooming(true);
-  };
-
-  const handleMouseLeaveZoom = () => {
-    setIsZooming(false);
-  };
-
-  const getEstimatedDeliveryDate = () => {
-    const target = new Date();
-    target.setDate(target.getDate() + 4);
-    return target.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  };
 
   const handleCheckPincode = async () => {
     if (pincode.length === 6) {
@@ -410,7 +474,7 @@ const handleBuyNowWithCoupon = async () => {
     }
 
     const userId = user.id || user._id;
-    const pId = String(productId);
+    const pId = String(product ? (product._id || product.id) : productId);
     const nextState = !isInWishlist;
 
     // Optimistic UI update

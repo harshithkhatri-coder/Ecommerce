@@ -275,7 +275,7 @@ export default function Admin({ onPageChange, onLogout }) {
 
   const handleSaveCoupon = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem("adminToken");
+    const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
     const url = editingCoupon
       ? `${API_BASE_URL}/admin/coupons/${editingCoupon._id || editingCoupon.id}`
       : `${API_BASE_URL}/admin/coupons`;
@@ -286,7 +286,7 @@ export default function Admin({ onPageChange, onLogout }) {
       : [];
 
     const body = {
-      code: couponForm.code.trim(),
+      code: couponForm.code.trim().toUpperCase(),
       discount_type: couponForm.discount_type,
       discount_value: Number(couponForm.discount_value),
       min_order_value: Number(couponForm.min_order_value) || 0,
@@ -309,12 +309,10 @@ export default function Admin({ onPageChange, onLogout }) {
         body: JSON.stringify(body)
       });
 
-    const data = await response.json();
+      const data = await response.json();
       if (data.success) {
-        // Close the modal first so the UI responds instantly
         closeCouponModal();
 
-        // Update state locally without requiring a full reload of all 8 admin endpoints
         if (editingCoupon) {
           setCoupons(prev => {
             const updated = prev.map(c =>
@@ -343,13 +341,13 @@ export default function Admin({ onPageChange, onLogout }) {
         alert(data.message || "Error saving coupon");
       }
     } catch (err) {
-      alert("Error saving coupon");
+      alert("Error saving coupon: " + (err.message || "Cannot connect to server. Ensure backend is running."));
     }
   };
 
   const handleDeleteCoupon = async (couponId) => {
     if (!window.confirm("Are you sure you want to delete this coupon?")) return;
-    const token = localStorage.getItem("adminToken");
+    const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
 
     try {
       const response = await fetch(`${API_BASE_URL}/admin/coupons/${couponId}`, {
@@ -565,8 +563,22 @@ export default function Admin({ onPageChange, onLogout }) {
       // Users
       if (usersRes.status === "fulfilled" && usersRes.value.ok) {
         const d = await usersRes.value.json();
-        if (d.success) {
-          const nonAdminUsers = (d.data || []).filter(u => u.role !== "admin");
+        if (d.success && Array.isArray(d.data)) {
+          let nonAdminUsers = d.data.filter(u => u && u.role !== "admin" && !((u.email || "").toLowerCase().endsWith("@example.com")));
+
+          const localUserStr = localStorage.getItem("user");
+          if (localUserStr) {
+            try {
+              const lu = JSON.parse(localUserStr);
+              if (lu && lu.email && lu.role !== "admin" && !lu.email.toLowerCase().endsWith("@example.com")) {
+                const exists = nonAdminUsers.some(u => (u.email || "").toLowerCase() === lu.email.toLowerCase());
+                if (!exists) {
+                  nonAdminUsers = [lu, ...nonAdminUsers];
+                }
+              }
+            } catch (e) {}
+          }
+
           setUsers(nonAdminUsers);
           setStats(prev => ({ ...prev, totalUsers: nonAdminUsers.length }));
         } else {

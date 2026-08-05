@@ -35,3 +35,7 @@ coverage/
 # Misc
 *.log
 .vercel
+.env*
+# Keep example env files for documentation
+!.env.example
+!.env.template

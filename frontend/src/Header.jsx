@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { ShoppingCart, User, Search, Menu, X, Moon, Sun, Mic } from "lucide-react";
 
+
+
 const ADMIN_LOGIN_EMAIL = "admin@veluxkicks.com";
 
 function isAdminUser(user) {
@@ -147,6 +149,8 @@ export default function Header({ currentPage, onPageChange, cartCount, user, onL
               {cartCount}
             </span>
           </button>
+
+
           
           {user ? (
             <div className="flex items-center gap-2 md:gap-3">

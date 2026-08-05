@@ -3,6 +3,7 @@ import { productsData } from "./productsData";
 import { Heart, ShoppingCart, Eye } from "lucide-react";
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
+import { getLocalWishlist, setLocalWishlist } from "./wishlistHelpers";
 
 export default function Products({ onAddToCart, onPageChange }) {
   // choose initial displayed count based on screen width for better UX on mobile
@@ -82,20 +83,38 @@ export default function Products({ onAddToCart, onPageChange }) {
   const fetchWishlist = async () => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (!user) return;
-    const userId = user.id || user._id;
+    const userId = (user.email || user.id || user._id || "").toLowerCase().trim();
     if (!userId) return;
 
+    const cached = getLocalWishlist(user);
+    if (cached && cached.length > 0) {
+      const cachedIds = cached.map(item => typeof item === "object" ? String(item._id || item.id) : String(item));
+      setWishlist(cachedIds);
+    }
+
     try {
-      const response = await fetch(`${API_BASE_URL}/wishlist/${userId}`);
+      const response = await fetch(`${API_BASE_URL}/wishlist/${encodeURIComponent(userId)}`);
       const data = await response.json();
-      if (data.success) {
-        const wishlistIds = (data.data || []).map(item => String(item._id || item.id));
+      if (data.success && Array.isArray(data.data)) {
+        const wishlistIds = data.data.map(item => String(item._id || item.id));
         setWishlist(wishlistIds);
+        setLocalWishlist(user, data.data);
       }
     } catch (err) {
       console.error("Error fetching wishlist:", err);
     }
   };
+
+  const isProductWishlisted = useCallback((product) => {
+    if (!product) return false;
+    const pId = String(product._id || product.id || "").trim();
+    const pNorm = pId.toLowerCase().replace(/^prod_/, "");
+    return wishlist.some(wId => {
+      const wStr = String(wId).trim();
+      const wNorm = wStr.toLowerCase().replace(/^prod_/, "");
+      return wStr === pId || (pNorm && wNorm && pNorm === wNorm);
+    });
+  }, [wishlist]);
 
   const handleToggleWishlist = async (product, e) => {
     e.stopPropagation();
@@ -107,25 +126,32 @@ export default function Products({ onAddToCart, onPageChange }) {
       return;
     }
 
-    const userId = user.id || user._id;
+    const userId = (user.email || user.id || user._id || "").toLowerCase().trim();
     const pId = String(product._id || product.id);
-    const isInWishlist = wishlist.includes(pId);
+    const isInWishlist = isProductWishlisted(product);
 
     // Optimistic UI update
+    const targetNorm = pId.toLowerCase().replace(/^prod_/, "");
     const updatedWishlist = isInWishlist
-      ? wishlist.filter(id => id !== pId)
+      ? wishlist.filter(id => {
+          const norm = String(id).toLowerCase().replace(/^prod_/, "");
+          return norm !== targetNorm && String(id) !== pId;
+        })
       : [...wishlist, pId];
+
     setWishlist(updatedWishlist);
+    setLocalWishlist(user, updatedWishlist);
 
     try {
       const method = isInWishlist ? "DELETE" : "POST";
-      const response = await fetch(`${API_BASE_URL}/wishlist/${userId}/${pId}`, {
+      const response = await fetch(`${API_BASE_URL}/wishlist/${encodeURIComponent(userId)}/${pId}`, {
         method,
       });
       const data = await response.json();
-      if (data.success) {
-        const wishlistIds = (data.data || []).map(item => String(item._id || item.id));
+      if (data.success && Array.isArray(data.data)) {
+        const wishlistIds = data.data.map(item => String(item._id || item.id));
         setWishlist(wishlistIds);
+        setLocalWishlist(user, data.data);
       }
     } catch (err) {
       console.error("Error updating wishlist:", err);
@@ -301,14 +327,14 @@ export default function Products({ onAddToCart, onPageChange }) {
                     {/* Heart Button */}
                     <button
                       onClick={(e) => handleToggleWishlist(product, e)}
-                      className={`absolute top-2 left-2 p-2 rounded-full transition ${wishlist.includes(String(product._id || product.id))
+                      className={`absolute top-2 left-2 p-2 rounded-full transition ${isProductWishlisted(product)
                           ? "bg-red-500 text-white shadow-md scale-105"
                           : "bg-white/80 text-gray-600 hover:bg-white"
                         }`}
                     >
                       <Heart
                         size={18}
-                        className={wishlist.includes(String(product._id || product.id)) ? "fill-current text-white" : ""}
+                        className={isProductWishlisted(product) ? "fill-current text-white" : ""}
                       />
                     </button>
                   </div>

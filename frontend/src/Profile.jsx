@@ -3,8 +3,10 @@ import { User, Mail, Phone, MapPin, Edit2, Save, X, Heart, ShoppingBag, LogOut, 
 import API_BASE_URL from "./config";
 import { resolveImageUrl } from "./imageHelpers";
 import { lookupPincode } from "./pincodeHelper";
+import { productsData } from "./productsData";
+import { getLocalWishlist, setLocalWishlist } from "./wishlistHelpers";
 
-export default function Profile({ onPageChange }) {
+export default function Profile({ onPageChange, initialShowWishlist = false }) {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -12,7 +14,8 @@ export default function Profile({ onPageChange }) {
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [wishlist, setWishlist] = useState([]);
   const [wishlistLoading, setWishlistLoading] = useState(true);
-  const [showWishlist, setShowWishlist] = useState(false);
+  const [showWishlist, setShowWishlist] = useState(initialShowWishlist);
+
   const [profileData, setProfileData] = useState({
     name: "",
     email: "",
@@ -87,11 +90,12 @@ export default function Profile({ onPageChange }) {
   };
 
   const fetchOrders = async () => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user) return;
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const userId = user.id || user._id;
+    if (!userId) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/orders/${user.id}`);
+      const response = await fetch(`${API_BASE_URL}/orders/${userId}`);
       const data = await response.json();
       if (data.success) {
         setOrders(data.data || []);
@@ -104,33 +108,64 @@ export default function Profile({ onPageChange }) {
   };
 
   const fetchWishlist = async () => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user) return;
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const userId = (user.email || user.id || user._id || "").toLowerCase().trim();
+    if (!userId) {
+      setWishlistLoading(false);
+      return;
+    }
 
+    // 1. Instant local cache load
+    const cached = getLocalWishlist(user);
+    if (cached && cached.length > 0) {
+      const resolved = cached.map(item => {
+        if (typeof item === "object" && item !== null) return item;
+        const targetId = String(item);
+        return productsData.find(p => {
+          const pNorm = String(p._id || p.id).toLowerCase().replace(/^prod_/, "");
+          const tNorm = targetId.toLowerCase().replace(/^prod_/, "");
+          return pNorm === tNorm || String(p._id || p.id) === targetId;
+        }) || null;
+      }).filter(Boolean);
+      setWishlist(resolved);
+    }
+
+    // 2. Fetch from backend API
     try {
-      const response = await fetch(`${API_BASE_URL}/wishlist/${user.id}`);
+      const response = await fetch(`${API_BASE_URL}/wishlist/${encodeURIComponent(userId)}`);
       const data = await response.json();
-      if (data.success) {
-        setWishlist(data.data || []);
+      if (data.success && Array.isArray(data.data)) {
+        setWishlist(data.data);
+        setLocalWishlist(user, data.data);
       }
     } catch (err) {
-      console.error("Error fetching wishlist:", err);
+      console.warn("Error fetching wishlist from API, using local cache:", err);
     } finally {
       setWishlistLoading(false);
     }
   };
 
   const handleRemoveFromWishlist = async (productId) => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user) return;
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const userId = (user.email || user.id || user._id || "").toLowerCase().trim();
+    if (!userId || !productId) return;
+
+    const targetNorm = String(productId).toLowerCase().replace(/^prod_/, "");
+    const updatedLocally = wishlist.filter(item => {
+      const itemNorm = String(item._id || item.id || item).toLowerCase().replace(/^prod_/, "");
+      return itemNorm !== targetNorm && String(item._id || item.id || item) !== String(productId);
+    });
+    setWishlist(updatedLocally);
+    setLocalWishlist(user, updatedLocally);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/wishlist/${user.id}/${productId}`, {
+      const response = await fetch(`${API_BASE_URL}/wishlist/${encodeURIComponent(userId)}/${productId}`, {
         method: "DELETE",
       });
       const data = await response.json();
-      if (data.success) {
-        setWishlist(data.data || []);
+      if (data.success && Array.isArray(data.data)) {
+        setWishlist(data.data);
+        setLocalWishlist(user, data.data);
       }
     } catch (err) {
       console.error("Error removing from wishlist:", err);
@@ -474,52 +509,46 @@ export default function Profile({ onPageChange }) {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {wishlist.map((product) => (
-                        <div key={product._id} className="border-2 border-gray-200 rounded-lg p-4 hover:border-gray-300 transition">
-                          <div className="flex gap-4">
-                            {(product.image_url || product.image) && (
+                      {wishlist.map((product) => {
+                        const pId = product._id || product.id;
+                        return (
+                          <div key={pId} className="bg-gray-950 border border-gray-800 rounded-xl p-4 hover:border-orange-500/50 transition">
+                            <div className="flex gap-4">
                               <img
-                                src={resolveImageUrl(product.image_url || product.image)}
+                                src={resolveImageUrl(product.image_url || product.image || product.images?.[0])}
                                 alt={product.name}
-                                className="w-24 h-24 object-cover rounded-lg"
+                                className="w-24 h-24 object-cover rounded-lg bg-gray-900 border border-gray-800"
                               />
-                            )}
-                            <div className="flex-1">
-                              <h4 className="font-bold text-gray-800">{product.name}</h4>
-                              <p className="text-sm text-gray-500">{product.category}</p>
-                              <p className="text-xl font-bold text-gray-700 mt-2">₹{product.price}</p>
+                              <div className="flex-1">
+                                <h4 className="font-bold text-white text-base">{product.name}</h4>
+                                <p className="text-xs text-gray-400">{product.category}</p>
+                                <p className="text-xl font-bold text-orange-400 mt-2">₹{product.price}</p>
+                              </div>
+                              <button
+                                onClick={() => handleRemoveFromWishlist(pId)}
+                                className="text-red-400 hover:text-red-300 transition h-fit p-1 bg-red-500/10 rounded-lg border border-red-500/20"
+                                title="Remove from wishlist"
+                              >
+                                <X size={18} />
+                              </button>
                             </div>
-                            <button
-                              onClick={() => handleRemoveFromWishlist(product._id)}
-                              className="text-gray-400 hover:text-gray-500 transition h-fit"
-                              title="Remove from wishlist"
-                            >
-                              <X size={20} />
-                            </button>
+                            <div className="flex gap-2 mt-4">
+                              <button
+                                onClick={() => onPageChange("ProductDetails", pId)}
+                                className="flex-1 bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700 py-2 rounded-xl transition text-xs font-bold"
+                              >
+                                View Details
+                              </button>
+                              <button
+                                onClick={() => onPageChange("ProductDetails", pId)}
+                                className="flex-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white py-2 rounded-xl transition text-xs font-extrabold shadow-md"
+                              >
+                                View / Buy
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex gap-2 mt-4">
-                            <button
-                              onClick={() => {
-                                localStorage.setItem('selectedProduct', JSON.stringify(product));
-                                onPageChange("ProductDetails");
-                              }}
-                              className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 transition text-sm font-semibold"
-                            >
-                              View
-                            </button>
-                            <button
-                              onClick={() => {
-                                const productWithId = { ...product, id: product._id };
-                                localStorage.setItem('selectedProduct', JSON.stringify(productWithId));
-                                onPageChange("ProductDetails");
-                              }}
-                               className="flex-1 bg-gradient-to-r from-gray-600 to-gray-700 text-white py-2 rounded-lg hover:shadow-lg transition text-sm font-semibold"
-                            >
-                              Add to Cart
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

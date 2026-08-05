@@ -1,4 +1,6 @@
-require("dotenv").config();
+if (process.env.VERCEL !== 'true') {
+  require("dotenv").config();
+}
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
@@ -8,7 +10,7 @@ const bcrypt = require("bcryptjs");
 const multer = require("multer");
 const fs = require("fs");
 const crypto = require("crypto");
-const { supabase, isSupabaseReady } = require("./supabaseClient");
+const { supabase, isSupabaseReady, SUPABASE_URL } = require("./supabaseClient");
 
 
 const app = express();
@@ -177,11 +179,20 @@ async function ensureAdminUser() {
 
 
 
-// ===== ROOT =====
-app.get("/", (req, res) => {
+// Normalize Vercel Serverless Function URLs
+app.use((req, res, next) => {
+  if (req.url && !req.url.startsWith("/api") && !req.url.startsWith("/images") && !req.url.startsWith("/uploads")) {
+    req.url = "/api" + (req.url.startsWith("/") ? "" : "/") + req.url;
+  }
+  next();
+});
+
+// ===== ROOT & HEALTH =====
+app.get(["/", "/api"], (req, res) => {
   res.json({
     success: true,
     message: "🚀 Supabase Backend API is running",
+    supabase_connected: isSupabaseReady,
     endpoints: {
       health: "/api/health",
       products: "/api/products",
@@ -189,6 +200,25 @@ app.get("/", (req, res) => {
     }
   });
 });
+
+app.get(["/health", "/api/health"], async (req, res) => {
+
+  let dbStatus = "disconnected";
+  if (isSupabaseReady) {
+    try {
+      const { error } = await supabase.from("products").select("id", { head: true });
+      if (!error) dbStatus = "connected";
+    } catch {}
+  }
+  res.json({
+    success: true,
+    supabase_connected: isSupabaseReady,
+    database_status: dbStatus,
+    supabase_url: SUPABASE_URL,
+    timestamp: new Date().toISOString()
+  });
+});
+
 
 // ===== AUTH ROUTES =====
 app.post("/api/auth/register", async (req, res) => {
@@ -225,6 +255,18 @@ app.post("/api/auth/register", async (req, res) => {
           role: normalizedEmail === ADMIN_EMAIL ? "admin" : "user"
         });
 
+        recordUserAccount({
+          id: userObj.id,
+          email: normalizedEmail,
+          name,
+          phone: phone || "",
+          address: address || "",
+          city: city || "",
+          state: state || "",
+          zip_code: zipCode || "",
+          country: country || ""
+        });
+
         return res.json({
           success: true,
           message: "Registered successfully",
@@ -248,7 +290,7 @@ app.post("/api/auth/register", async (req, res) => {
       country: country || "",
       role: normalizedEmail === ADMIN_EMAIL ? "admin" : "user"
     };
-    localUsers.push(newUser);
+    recordUserAccount(newUser);
     return res.json({
       success: true,
       message: "Registered successfully",
@@ -256,6 +298,35 @@ app.post("/api/auth/register", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, message: "Registration failed" });
+  }
+});
+
+app.post("/api/auth/sync-user", async (req, res) => {
+  try {
+    const { id, _id, name, email, phone, address, city, state, zipCode, zip_code, country, role } = req.body || {};
+    if (!email) return res.status(400).json({ success: false, message: "Email is required" });
+
+    const normEmail = normalizeEmail(email);
+    if (normEmail === ADMIN_EMAIL || role === "admin" || normEmail.endsWith("@example.com")) {
+      return res.json({ success: true, message: "Admin/Sample skipped" });
+    }
+
+    const userObj = {
+      id: id || _id || ("user_" + Date.now().toString(36)),
+      name: name || normEmail.split("@")[0],
+      email: normEmail,
+      phone: phone || "",
+      address: address || "",
+      city: city || "",
+      state: state || "",
+      zip_code: zip_code || zipCode || "",
+      country: country || "India"
+    };
+
+    await recordUserAccount(userObj);
+    return res.json({ success: true, message: "User account synced", data: userObj });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Failed to sync user" });
   }
 });
 
@@ -278,15 +349,18 @@ app.post("/api/auth/login", async (req, res) => {
         const { data: profile } = await supabase.from("users").select("*").eq("id", userObj.id).single();
         const token = authData.session?.access_token || jwt.sign({ id: userObj.id }, JWT_SECRET, { expiresIn: "7d" });
 
+        const userPayload = {
+          id: userObj.id,
+          email: normalizedEmail,
+          name: profile?.name || userObj.user_metadata?.name || normalizedEmail.split("@")[0],
+          role: profile?.role || (normalizedEmail === ADMIN_EMAIL ? "admin" : "user")
+        };
+        recordUserAccount(userPayload);
+
         return res.json({
           success: true,
           message: "Login successful",
-          data: serializeUser({
-            id: userObj.id,
-            email: normalizedEmail,
-            name: profile?.name || userObj.user_metadata?.name || normalizedEmail.split("@")[0],
-            role: profile?.role || (normalizedEmail === ADMIN_EMAIL ? "admin" : "user")
-          }, token)
+          data: serializeUser(userPayload, token)
         });
       }
     }
@@ -306,19 +380,20 @@ app.post("/api/auth/login", async (req, res) => {
       });
     }
 
-
     const userId = "user_" + Buffer.from(normalizedEmail).toString("hex").slice(0, 8);
     const token = jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: "7d" });
+    const userPayload = {
+      id: userId,
+      email: normalizedEmail,
+      name: normalizedEmail.split("@")[0],
+      role: normalizedEmail === ADMIN_EMAIL ? "admin" : "user"
+    };
+    recordUserAccount(userPayload);
 
     return res.json({
       success: true,
       message: "Login successful",
-      data: serializeUser({
-        id: userId,
-        email: normalizedEmail,
-        name: normalizedEmail.split("@")[0],
-        role: normalizedEmail === ADMIN_EMAIL ? "admin" : "user"
-      }, token)
+      data: serializeUser(userPayload, token)
     });
   } catch (err) {
     res.status(500).json({ success: false, message: "Login failed" });
@@ -346,17 +421,25 @@ const INITIAL_PRODUCTS = [
 
 app.get("/api/products/featured", async (req, res) => {
   try {
+    const limit = Number(req.query.limit || 8);
     if (isSupabaseReady) {
-      const { data, error } = await supabase.from("products").select("*").eq("is_featured", true);
+      const { data, error } = await supabase.from("products").select("*").eq("is_featured", true).limit(limit);
       if (!error && data && data.length > 0) {
         return res.json({ success: true, data });
       }
+      const { data: allProds, error: allErr } = await supabase.from("products").select("*").limit(limit);
+      if (!allErr && allProds && allProds.length > 0) {
+        return res.json({ success: true, data: allProds });
+      }
     }
-    const featured = INITIAL_PRODUCTS.filter(p => p.is_featured);
-    res.json({ success: true, data: featured });
+    const featured = INITIAL_PRODUCTS.filter(p => p.is_featured).slice(0, limit);
+    if (featured.length > 0) {
+      return res.json({ success: true, data: featured });
+    }
+    res.json({ success: true, data: INITIAL_PRODUCTS.slice(0, limit) });
   } catch (err) {
     const featured = INITIAL_PRODUCTS.filter(p => p.is_featured);
-    res.json({ success: true, data: featured });
+    res.json({ success: true, data: featured.length > 0 ? featured : INITIAL_PRODUCTS.slice(0, 8) });
   }
 });
 
@@ -367,12 +450,19 @@ app.get("/api/products", async (req, res) => {
       if (!error && data && data.length > 0) {
         return res.json({ success: true, data });
       }
+      if (!error && (!data || data.length === 0)) {
+        try {
+          await supabase.from("products").insert(INITIAL_PRODUCTS);
+        } catch (e) {}
+        return res.json({ success: true, data: INITIAL_PRODUCTS });
+      }
     }
     res.json({ success: true, data: INITIAL_PRODUCTS });
   } catch (err) {
     res.json({ success: true, data: INITIAL_PRODUCTS });
   }
 });
+
 
 app.get("/api/products/:id", async (req, res) => {
   try {
@@ -431,7 +521,7 @@ app.post("/api/products/:id/reviews", async (req, res) => {
 });
 
 // ===== COUPONS =====
-app.get("/api/coupons/active", async (req, res) => {
+app.get(["/api/coupons", "/api/coupons/active"], async (req, res) => {
   try {
     if (isSupabaseReady) {
       const { data, error } = await supabase.from("coupons").select("*").eq("is_active", true);
@@ -440,14 +530,15 @@ app.get("/api/coupons/active", async (req, res) => {
     const activeLocal = (localCoupons || []).filter(c => c.is_active !== false);
     res.json({ success: true, data: activeLocal });
   } catch (err) {
-    console.error("Error in /api/coupons/active:", err);
+    console.error("Error in /api/coupons:", err);
     res.status(500).json({ success: false, message: "Failed to fetch active coupons" });
   }
 });
 
 // ===== ORDERS =====
 app.post("/api/orders", async (req, res) => {
-  const { userId, items, total, address, coupon_code, discount } = req.body;
+  const { userId, items, total, address, coupon_code, discount, discount_amount } = req.body;
+  const finalDiscount = Number(discount !== undefined && discount !== null ? discount : (discount_amount || 0));
   if (!userId || !Array.isArray(items) || items.length === 0 || !total || !address || address.trim().length < 5) {
     return res.status(400).json({ success: false, message: "Missing required fields or delivery address is too short" });
   }
@@ -465,7 +556,7 @@ app.post("/api/orders", async (req, res) => {
         payment_method: "Prepaid",
         payment_status: "Paid",
         coupon_code: coupon_code || "",
-        discount: Number(discount || 0)
+        discount: finalDiscount
       }]).select().single();
 
       if (orderErr) throw orderErr;
@@ -511,7 +602,7 @@ app.post("/api/orders", async (req, res) => {
         payment_method: "Prepaid",
         payment_status: "Paid",
         coupon_code: coupon_code || "",
-        discount: Number(discount || 0),
+        discount: finalDiscount,
         items: items.map(item => ({
           ...item,
           order_id: orderId,
@@ -547,44 +638,134 @@ app.get("/api/orders/:userId", async (req, res) => {
 });
 
 // ===== WISHLIST =====
+const WISHLIST_FILE = path.join(__dirname, "data", "wishlist.json");
+
+function loadDiskWishlist() {
+  try {
+    if (fs.existsSync(WISHLIST_FILE)) {
+      const content = fs.readFileSync(WISHLIST_FILE, "utf8");
+      return JSON.parse(content) || [];
+    }
+  } catch (e) {
+    console.error("Error reading wishlist file:", e);
+  }
+  return [];
+}
+
+function saveDiskWishlist(wishlistArray) {
+  try {
+    const dir = path.dirname(WISHLIST_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(WISHLIST_FILE, JSON.stringify(wishlistArray, null, 2), "utf8");
+  } catch (e) {
+    console.error("Error writing wishlist file:", e);
+  }
+}
+
+let localWishlist = loadDiskWishlist();
+
+function isProductMatch(prod, idToMatch) {
+  if (!prod || !idToMatch) return false;
+  const pStr = String(prod._id || prod.id || "").trim();
+  const tStr = String(idToMatch || "").trim();
+
+  if (pStr === tStr) return true;
+
+  const pNorm = pStr.toLowerCase().replace(/^prod_/, "");
+  const tNorm = tStr.toLowerCase().replace(/^prod_/, "");
+
+  return Boolean(pNorm && tNorm && pNorm === tNorm);
+}
+
+async function getWishlistProducts(userId) {
+  if (!userId) return [];
+  const uId = String(userId).trim().toLowerCase();
+
+  const equivalentUserIds = new Set([uId]);
+  const allKnownUsers = [...loadDiskUsers(), ...localUsers];
+  const matchingUser = allKnownUsers.find(u => 
+    String(u.id || "").toLowerCase() === uId || 
+    String(u._id || "").toLowerCase() === uId || 
+    String(u.email || "").toLowerCase() === uId
+  );
+
+  if (matchingUser) {
+    if (matchingUser.email) equivalentUserIds.add(String(matchingUser.email).toLowerCase().trim());
+    if (matchingUser.id) equivalentUserIds.add(String(matchingUser.id).toLowerCase().trim());
+    if (matchingUser._id) equivalentUserIds.add(String(matchingUser._id).toLowerCase().trim());
+  }
+
+  let productIds = [];
+
+  if (isSupabaseReady) {
+    try {
+      const { data: wishlistItems, error: wishErr } = await supabase.from("wishlist").select("product_id, user_id");
+      if (!wishErr && wishlistItems) {
+        wishlistItems.forEach(w => {
+          const wUser = String(w.user_id || "").toLowerCase().trim();
+          if (equivalentUserIds.has(wUser)) {
+            productIds.push(String(w.product_id));
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  const diskItems = loadDiskWishlist();
+  [...diskItems, ...localWishlist].forEach(w => {
+    const wUser = String(w.user_id || "").toLowerCase().trim();
+    if (equivalentUserIds.has(wUser)) {
+      productIds.push(String(w.product_id));
+    }
+  });
+
+  productIds = Array.from(new Set(productIds));
+  if (productIds.length === 0) return [];
+
+  let allProducts = [...INITIAL_PRODUCTS];
+  if (isSupabaseReady) {
+    try {
+      const { data } = await supabase.from("products").select("*");
+      if (data && data.length > 0) {
+        allProducts = data;
+      }
+    } catch (e) {}
+  }
+
+  return allProducts.filter(p => productIds.some(targetId => isProductMatch(p, targetId)));
+}
+
 app.get("/api/wishlist/:userId", async (req, res) => {
   try {
-    if (isSupabaseReady) {
-      const { data: wishlistItems, error: wishErr } = await supabase.from("wishlist").select("product_id").eq("user_id", req.params.userId);
-      if (!wishErr && wishlistItems) {
-        const productIds = wishlistItems.map(w => w.product_id);
-        if (productIds.length === 0) return res.json({ success: true, data: [], count: 0 });
-
-        const { data: products, error: prodErr } = await supabase.from("products").select("*").in("id", productIds);
-        if (!prodErr && products) {
-          return res.json({ success: true, data: products || [], count: (products || []).length });
-        }
-      }
-    }
-
-    const userWishlist = localWishlist.filter(w => w.user_id === req.params.userId);
-    const productIds = userWishlist.map(w => w.product_id);
-    const allProducts = isSupabaseReady ? (await supabase.from("products").select("*")).data || [] : [];
-    const wishlistProducts = allProducts.filter(p => productIds.includes(p.id));
-    res.json({ success: true, data: wishlistProducts, count: wishlistProducts.length });
-  } catch {
+    const userId = String(req.params.userId);
+    const matchedProducts = await getWishlistProducts(userId);
+    res.json({ success: true, data: matchedProducts, count: matchedProducts.length });
+  } catch (err) {
     res.status(500).json({ success: false, message: "Failed to fetch wishlist" });
   }
 });
 
 app.post("/api/wishlist/:userId/:productId", async (req, res) => {
   try {
+    const userId = String(req.params.userId);
+    const productId = String(req.params.productId);
+
     if (isSupabaseReady) {
-      await supabase.from("wishlist").upsert([{ user_id: req.params.userId, product_id: req.params.productId }]);
-      const { data: products } = await supabase.from("products").select("*").eq("id", req.params.productId);
-      res.json({ success: true, data: products || [], message: "Added to wishlist" });
-    } else {
-      const exists = localWishlist.some(w => w.user_id === req.params.userId && w.product_id === req.params.productId);
-      if (!exists) {
-        localWishlist.push({ user_id: req.params.userId, product_id: req.params.productId });
-      }
-      res.json({ success: true, data: [], message: "Added to wishlist" });
+      try {
+        await supabase.from("wishlist").upsert([{ user_id: userId, product_id: productId }]);
+      } catch (e) {}
     }
+
+    const exists = localWishlist.some(w => String(w.user_id) === userId && isProductMatch({ id: w.product_id }, productId));
+    if (!exists) {
+      localWishlist.push({ user_id: userId, product_id: productId });
+      saveDiskWishlist(localWishlist);
+    }
+
+    const updated = await getWishlistProducts(userId);
+    res.json({ success: true, message: "Added to wishlist", data: updated });
   } catch {
     res.status(500).json({ success: false, message: "Failed to add to wishlist" });
   }
@@ -592,19 +773,27 @@ app.post("/api/wishlist/:userId/:productId", async (req, res) => {
 
 app.delete("/api/wishlist/:userId/:productId", async (req, res) => {
   try {
+    const userId = String(req.params.userId);
+    const productId = String(req.params.productId);
+
     if (isSupabaseReady) {
-      await supabase.from("wishlist").delete().eq("user_id", req.params.userId).eq("product_id", req.params.productId);
-    } else {
-      const index = localWishlist.findIndex(w => w.user_id === req.params.userId && w.product_id === req.params.productId);
-      if (index >= 0) {
-        localWishlist.splice(index, 1);
-      }
+      try {
+        await supabase.from("wishlist").delete().eq("user_id", userId).eq("product_id", productId);
+        const altId = productId.startsWith("prod_") ? productId.replace("prod_", "") : "prod_" + productId;
+        await supabase.from("wishlist").delete().eq("user_id", userId).eq("product_id", altId);
+      } catch (e) {}
     }
-    res.json({ success: true, message: "Removed from wishlist" });
+
+    localWishlist = localWishlist.filter(w => !(String(w.user_id) === userId && isProductMatch({ id: w.product_id }, productId)));
+    saveDiskWishlist(localWishlist);
+
+    const updated = await getWishlistProducts(userId);
+    res.json({ success: true, message: "Removed from wishlist", data: updated });
   } catch {
     res.status(500).json({ success: false, message: "Failed to remove from wishlist" });
   }
 });
+
 
 // ===== CAROUSEL =====
 app.get("/api/carousel-configs", async (req, res) => {
@@ -906,15 +1095,112 @@ app.put("/api/admin/carousel", adminAuth, async (req, res) => {
   }
 });
 
+const USERS_FILE = path.join(__dirname, "data", "users.json");
+
+function loadDiskUsers() {
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const content = fs.readFileSync(USERS_FILE, "utf8");
+      return (JSON.parse(content) || []).filter(u => u && u.email && !u.email.toLowerCase().endsWith("@example.com"));
+    }
+  } catch (e) {
+    console.error("Error reading users file:", e);
+  }
+  return [];
+}
+
+function saveDiskUsers(usersArray) {
+  try {
+    const dir = path.dirname(USERS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const cleanUsers = (usersArray || []).filter(u => u && u.email && !u.email.toLowerCase().endsWith("@example.com"));
+    fs.writeFileSync(USERS_FILE, JSON.stringify(cleanUsers, null, 2), "utf8");
+  } catch (e) {
+    console.error("Error writing users file:", e);
+  }
+}
+
+let localUsers = loadDiskUsers();
+
+async function recordUserAccount(userObj) {
+  if (!userObj || !userObj.email) return;
+  const normEmail = normalizeEmail(userObj.email);
+  if (normEmail === ADMIN_EMAIL || normEmail.endsWith("@example.com")) return;
+
+  const userRecord = {
+    id: userObj.id || userObj._id || ("user_" + Date.now().toString(36)),
+    name: userObj.name || normEmail.split("@")[0],
+    email: normEmail,
+    phone: userObj.phone || "",
+    address: userObj.address || "",
+    city: userObj.city || "",
+    state: userObj.state || "",
+    zip_code: userObj.zip_code || userObj.zipCode || "",
+    country: userObj.country || "India",
+    role: "user",
+    created_at: userObj.created_at || new Date().toISOString()
+  };
+
+  const idx = localUsers.findIndex(u => normalizeEmail(u.email) === normEmail);
+  if (idx >= 0) {
+    localUsers[idx] = { ...localUsers[idx], ...userRecord };
+  } else {
+    localUsers.unshift(userRecord);
+  }
+
+  saveDiskUsers(localUsers);
+
+  if (isSupabaseReady) {
+    try {
+      await supabase.from("users").upsert([userRecord]);
+    } catch (e) {}
+  }
+}
+
 app.get("/api/admin/users", adminAuth, async (req, res) => {
   try {
+    let supabaseUsers = [];
+    let authUsers = [];
+
     if (isSupabaseReady) {
-      const { data, error } = await supabase.from("users").select("*").neq("role", "admin");
-      if (!error && data) return res.json({ success: true, data });
+      try {
+        const { data } = await supabase.from("users").select("*");
+        if (data && data.length > 0) supabaseUsers = data;
+      } catch (e) {}
+
+      try {
+        const { data: authData } = await supabase.auth.admin.listUsers();
+        if (authData?.users) {
+          authUsers = authData.users.map(u => ({
+            id: u.id,
+            email: normalizeEmail(u.email),
+            name: u.user_metadata?.name || normalizeEmail(u.email).split("@")[0],
+            phone: u.phone || u.user_metadata?.phone || "",
+            created_at: u.created_at,
+            role: "user"
+          }));
+        }
+      } catch (e) {}
     }
-    res.json({ success: true, data: localUsers.filter(u => u.role !== "admin") });
+
+    const diskUsers = loadDiskUsers();
+    const userMap = new Map();
+
+    [...authUsers, ...supabaseUsers, ...diskUsers, ...localUsers].forEach(u => {
+      if (!u || !u.email) return;
+      const em = normalizeEmail(u.email);
+      if (em !== ADMIN_EMAIL && u.role !== "admin" && !em.endsWith("@example.com")) {
+        const existing = userMap.get(em) || {};
+        userMap.set(em, { ...existing, ...u, email: em });
+      }
+    });
+
+    const realUsers = Array.from(userMap.values());
+    res.json({ success: true, data: realUsers });
   } catch {
-    res.json({ success: true, data: localUsers.filter(u => u.role !== "admin") });
+    res.json({ success: true, data: loadDiskUsers().filter(u => !u.email.endsWith("@example.com")) });
   }
 });
 
@@ -923,21 +1209,26 @@ let localCoupons = [
   { id: "c2", _id: "c2", code: "SAVE20", discount_type: "percentage", discount_value: 20, min_order_value: 500, max_discount: 200, is_active: true, target_audience: "all", usage_limit_per_user: 1 },
   { id: "c3", _id: "c3", code: "FLAT50", discount_type: "fixed", discount_value: 50, min_order_value: 300, max_discount: 0, is_active: true, target_audience: "all", usage_limit_per_user: 1 }
 ];
-let localOrders = [];
-let localWishlist = [];
-let localUsers = [];
 
 app.get("/api/admin/coupons", adminAuth, async (req, res) => {
   try {
     if (isSupabaseReady) {
       const { data, error } = await supabase.from("coupons").select("*");
-      if (!error && data) return res.json({ success: true, data });
+      if (!error && data && data.length > 0) return res.json({ success: true, data });
+      if (!error && (!data || data.length === 0)) {
+        try {
+          await supabase.from("coupons").insert(localCoupons);
+        } catch (e) {}
+        return res.json({ success: true, data: localCoupons });
+      }
     }
     res.json({ success: true, data: localCoupons });
   } catch {
     res.json({ success: true, data: localCoupons });
   }
 });
+
+
 
 app.post("/api/admin/coupons", adminAuth, async (req, res) => {
   try {
@@ -1192,4 +1483,6 @@ async function startServer() {
 if (require.main === module || (!process.env.VERCEL && process.env.NODE_ENV !== "production")) {
   startServer();
 }
+
+module.exports = app;
 
