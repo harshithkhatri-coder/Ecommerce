@@ -6,6 +6,7 @@ import Products from "./Products";
 import ProductDetails from "./ProductDetails";
 import Cart from "./Cart";
 import Login from "./Login";
+import Signup from "./Signup";
 import Profile from "./Profile";
 import Admin from "./Admin";
 import Footer from "./Footer";
@@ -188,6 +189,8 @@ export default function App() {
         return <Cart cart={cart} setCart={setCart} onRemoveFromCart={removeFromCart} onPageChange={handlePageChange} user={user} />;
       case "Login":
         return <Login onPageChange={handlePageChange} />;
+      case "Signup":
+        return <Signup onPageChange={handlePageChange} />;
       case "Profile":
         return <Profile onPageChange={handlePageChange} />;
       case "AddAddress":
