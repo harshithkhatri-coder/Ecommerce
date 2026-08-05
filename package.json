@@ -13,8 +13,8 @@
     "start:backend": "cd backend && node server.js",
     "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
     "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install",
-    "vercel-build": "cd frontend && npm install && cross-env CI=false npm run build",
-    "build": "cd frontend && cross-env CI=false npm run build",
+    "vercel-build": "cd frontend && npm install && cross-env CI=false npm run build && node ../scripts/copy-build.js",
+    "build": "cd frontend && cross-env CI=false npm run build && node ../scripts/copy-build.js",
     "test": "cd frontend && npm test"
   },
   "devDependencies": {
