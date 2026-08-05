@@ -1480,7 +1480,7 @@ async function startServer() {
   }
 }
 
-if (require.main === module || (!process.env.VERCEL && process.env.NODE_ENV !== "production")) {
+if (require.main === module) {
   startServer();
 }
 
