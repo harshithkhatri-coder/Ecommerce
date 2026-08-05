@@ -1204,40 +1204,68 @@ app.get("/api/admin/users", adminAuth, async (req, res) => {
   }
 });
 
-let localCoupons = [
+const COUPONS_FILE = path.join(__dirname, "data", "coupons.json");
+
+const DEFAULT_COUPONS = [
   { id: "c1", _id: "c1", code: "WELCOME10", discount_type: "percentage", discount_value: 10, min_order_value: 0, max_discount: 0, is_active: true, target_audience: "all", usage_limit_per_user: 1 },
   { id: "c2", _id: "c2", code: "SAVE20", discount_type: "percentage", discount_value: 20, min_order_value: 500, max_discount: 200, is_active: true, target_audience: "all", usage_limit_per_user: 1 },
   { id: "c3", _id: "c3", code: "FLAT50", discount_type: "fixed", discount_value: 50, min_order_value: 300, max_discount: 0, is_active: true, target_audience: "all", usage_limit_per_user: 1 }
 ];
 
+function loadDiskCoupons() {
+  try {
+    if (fs.existsSync(COUPONS_FILE)) {
+      const content = fs.readFileSync(COUPONS_FILE, "utf8");
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error("Error reading coupons file:", e);
+  }
+  return DEFAULT_COUPONS;
+}
+
+function saveDiskCoupons(couponsArray) {
+  try {
+    const dir = path.dirname(COUPONS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(COUPONS_FILE, JSON.stringify(couponsArray, null, 2), "utf8");
+  } catch (e) {
+    console.error("Error writing coupons file:", e);
+  }
+}
+
+let localCoupons = loadDiskCoupons();
+
 app.get("/api/admin/coupons", adminAuth, async (req, res) => {
   try {
     if (isSupabaseReady) {
-      const { data, error } = await supabase.from("coupons").select("*");
-      if (!error && data && data.length > 0) return res.json({ success: true, data });
-      if (!error && (!data || data.length === 0)) {
-        try {
-          await supabase.from("coupons").insert(localCoupons);
-        } catch (e) {}
-        return res.json({ success: true, data: localCoupons });
-      }
+      try {
+        const { data, error } = await supabase.from("coupons").select("*");
+        if (!error && Array.isArray(data) && data.length > 0) return res.json({ success: true, data });
+      } catch (e) {}
     }
-    res.json({ success: true, data: localCoupons });
+    return res.json({ success: true, data: localCoupons });
   } catch {
-    res.json({ success: true, data: localCoupons });
+    return res.json({ success: true, data: localCoupons });
   }
 });
-
-
 
 app.post("/api/admin/coupons", adminAuth, async (req, res) => {
   try {
     const coupon = { ...req.body, id: "c_" + Date.now(), _id: "c_" + Date.now() };
     if (isSupabaseReady) {
-      const { data } = await supabase.from("coupons").insert([req.body]).select().single();
-      if (data) return res.json({ success: true, data });
+      const { data } = await supabase.from("coupons").insert([coupon]).select().single();
+      if (data) {
+        localCoupons.unshift(data);
+        saveDiskCoupons(localCoupons);
+        return res.json({ success: true, data });
+      }
     }
     localCoupons.unshift(coupon);
+    saveDiskCoupons(localCoupons);
     res.json({ success: true, data: coupon });
   } catch {
     res.status(500).json({ success: false, message: "Failed to create coupon" });
@@ -1248,9 +1276,14 @@ app.put("/api/admin/coupons/:id", adminAuth, async (req, res) => {
   try {
     if (isSupabaseReady) {
       const { data } = await supabase.from("coupons").update(req.body).eq("id", req.params.id).select().single();
-      if (data) return res.json({ success: true, data });
+      if (data) {
+        localCoupons = localCoupons.map(c => (c.id === req.params.id || c._id === req.params.id) ? { ...c, ...data } : c);
+        saveDiskCoupons(localCoupons);
+        return res.json({ success: true, data });
+      }
     }
     localCoupons = localCoupons.map(c => (c.id === req.params.id || c._id === req.params.id) ? { ...c, ...req.body } : c);
+    saveDiskCoupons(localCoupons);
     res.json({ success: true, data: { ...req.body, id: req.params.id, _id: req.params.id } });
   } catch {
     res.status(500).json({ success: false, message: "Failed to update coupon" });
@@ -1263,6 +1296,7 @@ app.delete("/api/admin/coupons/:id", adminAuth, async (req, res) => {
       await supabase.from("coupons").delete().eq("id", req.params.id);
     }
     localCoupons = localCoupons.filter(c => c.id !== req.params.id && c._id !== req.params.id);
+    saveDiskCoupons(localCoupons);
     res.json({ success: true, message: "Coupon deleted" });
   } catch {
     res.status(500).json({ success: false, message: "Failed to delete coupon" });

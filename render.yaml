@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: ecommerce-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: SUPABASE_URL
+        value: https://yhvhqivqjapdujiiyjwg.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlodmhxaXZxamFwZHVqaWl5andnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NTQ2NzAsImV4cCI6MjEwMTQzMDY3MH0.Ep96oxYYtyAZtI_oyiRPxF4q5Wrn6pZeSs56Ld2qsYc
+      - key: JWT_SECRET
+        value: velux_kicks_secret_key_2024
+      - key: ADMIN_EMAIL
+        value: admin@veluxkicks.com
+      - key: ADMIN_PASSWORD
+        value: admin@12341

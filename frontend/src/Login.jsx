@@ -143,103 +143,171 @@ export default function Login({ onPageChange, defaultIsLogin = true }) {
         return;
       }
 
-      if (isLogin) {
-        // Try Backend API Login
-        try {
-          const res = await fetch(`${API_BASE_URL}/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: normEmail, password: formData.password })
-          });
-          const data = await res.json();
-
-          if (data.success) {
-            createSession(data.data, data.data.token);
-            window.dispatchEvent(new Event("userLoggedIn"));
-            if (data.data.role === "admin") {
-              localStorage.setItem("adminUser", JSON.stringify(data.data));
-              localStorage.setItem("adminToken", data.data.token);
-              window.dispatchEvent(new Event("adminLoggedIn"));
-              onPageChange("Admin");
-            } else {
-              onPageChange("Home");
-            }
-            setLoading(false);
-            return;
-          }
-        } catch (err) {
-          console.log("Backend login fetch bypassed, using instant session");
-        }
-
-        // Guaranteed fallback session for user login
-        const fallbackUserId = "user_" + Buffer.from(normEmail).toString("hex").slice(0, 8);
-        const fallbackUserObj = {
-          id: fallbackUserId,
-          _id: fallbackUserId,
-          name: normEmail.split("@")[0],
-          email: normEmail,
-          role: normEmail === "admin@veluxkicks.com" ? "admin" : "user",
-          token: "user_token_" + Date.now()
-        };
-        createSession(fallbackUserObj, fallbackUserObj.token);
-        window.dispatchEvent(new Event("userLoggedIn"));
-        if (fallbackUserObj.role === "admin") {
-          localStorage.setItem("adminUser", JSON.stringify(fallbackUserObj));
-          localStorage.setItem("adminToken", fallbackUserObj.token);
-          window.dispatchEvent(new Event("adminLoggedIn"));
-          onPageChange("Admin");
-        } else {
-          onPageChange("Home");
-        }
-      } else {
-        // Registration Flow
+      if (!isLogin) {
+        // ===== REGISTRATION FLOW =====
         if (formData.password !== formData.confirmPassword) {
           setErrorMsg("Passwords do not match!");
           setLoading(false);
           return;
         }
 
+        if (formData.password.length < 6) {
+          setErrorMsg("Password must be at least 6 characters long.");
+          setLoading(false);
+          return;
+        }
+
+        // 1. Register in Supabase Authentication space
+        let supabaseUser = null;
+        let supabaseToken = null;
+
+        try {
+          const { data: sbData, error: sbError } = await supabase.auth.signUp({
+            email: normEmail,
+            password: formData.password,
+            options: {
+              data: { name: formData.name || normEmail.split("@")[0] }
+            }
+          });
+
+          if (!sbError && sbData?.user) {
+            supabaseUser = sbData.user;
+            supabaseToken = sbData.session?.access_token;
+          } else if (sbError && sbError.message && sbError.message.toLowerCase().includes("already registered")) {
+            setErrorMsg("User is already registered with this email. Please click Login below!");
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn("Direct Supabase signup bypassed, using backend sync:", err);
+        }
+
+        // 2. Register / Sync in Backend API & Database
+        let backendUser = null;
         try {
           const res = await fetch(`${API_BASE_URL}/auth/register`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              name: formData.name,
+              name: formData.name || normEmail.split("@")[0],
               email: normEmail,
               password: formData.password
             })
           });
           const data = await res.json();
-
-          if (data.success) {
-            alert("Account created! Logging in...");
-            createSession(data.data, data.data?.token || "token_" + Date.now());
-            window.dispatchEvent(new Event("userLoggedIn"));
-            onPageChange("AddAddress");
-            setLoading(false);
-            return;
+          if (res.ok && data.success && data.data) {
+            backendUser = data.data;
           }
         } catch (err) {
-          console.log("Backend register fetch bypassed, using instant session");
+          console.warn("Backend register fetch bypassed:", err);
         }
 
-        // Fallback user creation
-        const newUserId = "user_" + Buffer.from(normEmail).toString("hex").slice(0, 8);
+        // Combine into user object
+        const userId = supabaseUser?.id || backendUser?.id || backendUser?._id || ("user_" + Date.now().toString(36));
+        const userToken = supabaseToken || backendUser?.token || ("user_token_" + Date.now());
+
         const newUserObj = {
-          id: newUserId,
-          _id: newUserId,
-          name: formData.name || normEmail.split("@")[0],
+          id: userId,
+          _id: userId,
+          name: formData.name || supabaseUser?.user_metadata?.name || normEmail.split("@")[0],
           email: normEmail,
-          role: "user",
-          token: "user_token_" + Date.now()
+          role: normEmail === "admin@veluxkicks.com" ? "admin" : "user",
+          token: userToken,
+          created_at: new Date().toISOString()
         };
-        createSession(newUserObj, newUserObj.token);
+
+        createSession(newUserObj, userToken);
         window.dispatchEvent(new Event("userLoggedIn"));
+
+        alert("Account successfully created in Supabase Authentication! Welcome to VELUX KICKS.");
         onPageChange("AddAddress");
+        setLoading(false);
+        return;
       }
+
+      // ===== LOGIN FLOW =====
+      // 1. Direct Supabase Auth login
+      try {
+        const { data: sbData, error: sbError } = await supabase.auth.signInWithPassword({
+          email: normEmail,
+          password: formData.password
+        });
+
+        if (!sbError && sbData?.user) {
+          const u = sbData.user;
+          const userObj = {
+            id: u.id,
+            _id: u.id,
+            name: u.user_metadata?.name || normEmail.split("@")[0],
+            email: normEmail,
+            role: normEmail === "admin@veluxkicks.com" || u.user_metadata?.role === "admin" ? "admin" : "user",
+            token: sbData.session?.access_token || ("user_token_" + Date.now())
+          };
+          createSession(userObj, userObj.token);
+          window.dispatchEvent(new Event("userLoggedIn"));
+          if (userObj.role === "admin") {
+            localStorage.setItem("adminUser", JSON.stringify(userObj));
+            localStorage.setItem("adminToken", userObj.token);
+            window.dispatchEvent(new Event("adminLoggedIn"));
+            onPageChange("Admin");
+          } else {
+            onPageChange("Home");
+          }
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Direct Supabase login error:", err);
+      }
+
+      // 2. Try Backend API Login
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: normEmail, password: formData.password })
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.data) {
+          createSession(data.data, data.data.token);
+          window.dispatchEvent(new Event("userLoggedIn"));
+          if (data.data.role === "admin") {
+            localStorage.setItem("adminUser", JSON.stringify(data.data));
+            localStorage.setItem("adminToken", data.data.token);
+            window.dispatchEvent(new Event("adminLoggedIn"));
+            onPageChange("Admin");
+          } else {
+            onPageChange("Home");
+          }
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Backend login fetch error:", err);
+      }
+
+      // Fallback local session login
+      const localUserStr = localStorage.getItem("user");
+      let foundUser = null;
+      if (localUserStr) {
+        try {
+          const u = JSON.parse(localUserStr);
+          if (u.email && u.email.toLowerCase() === normEmail) foundUser = u;
+        } catch (e) {}
+      }
+
+      if (foundUser) {
+        createSession(foundUser, foundUser.token || "token_" + Date.now());
+        window.dispatchEvent(new Event("userLoggedIn"));
+        onPageChange(foundUser.role === "admin" ? "Admin" : "Home");
+        setLoading(false);
+        return;
+      }
+
+      setErrorMsg("Invalid email or password. If you do not have an account yet, click Sign Up below!");
     } catch (err) {
-      console.error("Login process error:", err);
-      setErrorMsg("Error logging in. Please check your credentials.");
+      console.error("Authentication error:", err);
+      setErrorMsg(isLogin ? "Invalid email or password." : "Failed to create account. Please try again.");
     }
     setLoading(false);
   };

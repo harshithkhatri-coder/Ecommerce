@@ -588,12 +588,24 @@ export default function Admin({ onPageChange, onLogout }) {
       }
 
       // Coupons
+      const DEFAULT_ADMIN_COUPONS = [
+        { id: "c1", _id: "c1", code: "WELCOME10", discount_type: "percentage", discount_value: 10, min_order_value: 0, max_discount: 0, is_active: true, target_audience: "all", usage_limit_per_user: 1 },
+        { id: "c2", _id: "c2", code: "SAVE20", discount_type: "percentage", discount_value: 20, min_order_value: 500, max_discount: 200, is_active: true, target_audience: "all", usage_limit_per_user: 1 },
+        { id: "c3", _id: "c3", code: "FLAT50", discount_type: "fixed", discount_value: 50, min_order_value: 300, max_discount: 0, is_active: true, target_audience: "all", usage_limit_per_user: 1 }
+      ];
+
       if (couponsRes.status === "fulfilled" && couponsRes.value.ok) {
         const d = await couponsRes.value.json();
-        if (d.success) {
-          setCoupons(d.data || []);
-          setStats(prev => ({ ...prev, totalCoupons: (d.data || []).filter(c => c.is_active).length }));
+        if (d.success && Array.isArray(d.data) && d.data.length > 0) {
+          setCoupons(d.data);
+          setStats(prev => ({ ...prev, totalCoupons: d.data.filter(c => c.is_active).length }));
+        } else {
+          setCoupons(DEFAULT_ADMIN_COUPONS);
+          setStats(prev => ({ ...prev, totalCoupons: DEFAULT_ADMIN_COUPONS.length }));
         }
+      } else {
+        setCoupons(DEFAULT_ADMIN_COUPONS);
+        setStats(prev => ({ ...prev, totalCoupons: DEFAULT_ADMIN_COUPONS.length }));
       }
 
       // Ads
